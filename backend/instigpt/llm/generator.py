@@ -1,7 +1,7 @@
+import os
 from typing import TypedDict, Generator
-import re
 
-from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import AzureChatOpenAI
 from langchain.prompts import PromptTemplate, ChatPromptTemplate
 from langchain_core.runnables import Runnable, RunnableConfig, chain
 from langchain_core.language_models import BaseChatModel
@@ -16,9 +16,12 @@ debug_config: RunnableConfig = {"callbacks": [ConsoleCallbackHandler()]}
 
 
 def get_generator_model():
-    return ChatGoogleGenerativeAI(
+    return AzureChatOpenAI(
         model=config.GENERATOR_MODEL,
         temperature=config.GENERATOR_TEMPERATURE,
+        azure_endpoint=os.environ["OPENAI_API_ENDPOINT"],
+        api_key=os.environ["OPENAI_API_KEY"],
+        api_version=os.environ["OPENAI_API_VERSION"],
     )  # type: ignore
 
 
@@ -49,7 +52,7 @@ d. Crucially, while providing factual information about IIT Bombay, ensure that 
 
 Conversational History:
 a. Leverage your stored conversational history to maintain coherence in ongoing interactions, referencing past exchanges and responses as needed.
-b. Strive to avoid repetition and endeavor to introduce fresh, informative content in each conversation.
+b. Avoid repetition and endeavor to introduce fresh, informative content in each conversation.
 c. Employ stored information to offer consistent and personalized experiences to returning users.
 
 Friendly and Engaging Tone:
@@ -91,15 +94,11 @@ def get_chain(
 
     @chain
     def my_chain(inp: ChainInput) -> str:
-        question = inp["question"].lower()
-        search_regex = r"\bpor\b|\bpors\b|\bp.o.r\b|\bp.o.r.s\b|\bp.o.rs\b|\bp.o.r\b|\bp.or\b|\bpo.r\b|\bp.ors\b|\bpo.rs\b"
-        replacement_text = "Positions of Responsibilities"
-        question = re.sub(search_regex, replacement_text, question)
         if inp["chat_history"] == "None":
-            condensed_question = question
+            condensed_question = inp["question"]
         else:
             condensed_question = question_condenser.invoke(
-                {"question": question, "chat_history": inp["chat_history"]}
+                {"question": inp["question"], "chat_history": inp["chat_history"]}
             )
 
         # TOOD: Use GPTCache here!
@@ -132,11 +131,11 @@ def get_chain(
 
         return final_answer.invoke(
             {
-                "question": question,
+                "question": inp["question"],
                 "context": context,
-                "search_results": [
-                    res[:3000] for res in extracted_search_results if res is not None
-                ],
+                "search_results": "\n".join(
+                    [res[:3000] for res in extracted_search_results if res is not None]
+                ),
                 "chat_history": inp["chat_history"],
             }
         )

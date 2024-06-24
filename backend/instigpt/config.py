@@ -1,13 +1,9 @@
 # Embedder
-EMBEDDING_MODEL = "voyage-large-2"
-# EMBEDDING_MODEL = "jinaai/jina-embeddings-v2-base-en"
-# EMBEDDING_MODEL = "models/embedding-001"
-
-# Retriever
-COLLECTION_NAME = "prototype-gemini-final"
+EMBEDDING_MODEL = "text-embedding-ada-002"
 
 # Generator
-GENERATOR_MODEL = "gemini-pro"
+GENERATOR_MODEL_MINI = "gpt-35-turbo"
+GENERATOR_MODEL = "gpt-4"
 GENERATOR_TEMPERATURE = 0
 
 COOKIE_NAME = "session_id"

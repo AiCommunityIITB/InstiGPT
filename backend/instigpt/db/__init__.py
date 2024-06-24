@@ -1,24 +1,31 @@
-from typing import Optional
+from logging import info
+from contextlib import asynccontextmanager
 import os
 
-from sqlmodel import create_engine, SQLModel
-from sqlalchemy import Engine
+from fastapi import FastAPI
+from motor.motor_asyncio import AsyncIOMotorClient
+from beanie import init_beanie
 
-_engine: Optional[Engine] = None
-
-
-def get_engine() -> Engine:
-    global _engine
-    if _engine is not None:
-        return _engine
-
-    _engine = create_engine(os.environ["DATABASE_URL"])
-
-    return _engine
+from .conversation import Conversation
+from .session import Session
+from .user import User
 
 
-def run_migrations():
-    engine = get_engine()
+@asynccontextmanager
+async def initialize_db_lifespan(app: FastAPI):
+    client = AsyncIOMotorClient(os.environ["DATABASE_URL"])
+    await init_beanie(
+        database=client.db_name, document_models=[Conversation, Session, User]
+    )
 
-    # TODO: Handle actual migrations
-    SQLModel.metadata.create_all(engine)
+    # Check if connected successfully
+    ping_resp = await client.get_default_database().command("ping")
+    if int(ping_resp["ok"]) != 1:
+        raise Exception("Problem connecting to database cluster.")
+    else:
+        info("Connected to database cluster.")
+
+    yield
+
+    # Shutdown
+    client.close()

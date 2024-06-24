@@ -2,10 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from instigpt import config
+from instigpt import config, db
 from . import auth, conversation
 
-app = FastAPI()
+app = FastAPI(lifespan=db.initialize_db_lifespan)
 
 app.add_middleware(
     CORSMiddleware,

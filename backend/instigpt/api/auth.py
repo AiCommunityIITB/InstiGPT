@@ -1,87 +1,54 @@
-import os
 import datetime
 from typing import Annotated
 import uuid
 
-import requests
-from fastapi import APIRouter, Cookie, Request, HTTPException, Depends
+import argon2
+from fastapi import APIRouter, Cookie, HTTPException, Depends
 from fastapi.responses import JSONResponse, Response
 
-from instigpt import config
-from instigpt.db import (
-    session as db_session,
-    user as db_user,
-)
+from instigpt import config, db
 from . import helpers
+from .input_models import RegisterInput, LoginInput
 
 router = APIRouter()
 
 
+@router.get("/register")
+async def register(input: RegisterInput):
+    user = db.user.get_user_by_username(input.username)
+    if user is not None:
+        raise HTTPException(status_code=400, detail="User already exists")
+
+    user = db.user.User(
+        username=input.username,
+        password=argon2.hash_password(input.password.encode()),
+        name=input.name,
+    )
+    await db.user.create_user(user)
+
+    return JSONResponse(status_code=204)
+
+
 @router.get("/login")
-async def login(code: str, response: Response):
-    if code == "":
-        return JSONResponse({"message": "code is empty"}, status_code=400)
-
-    # Get access token
-    token_res = requests.post(
-        os.environ["SSO_TOKEN_URL"],
-        data={
-            "code": code,
-            "redirect_uri": os.environ["SSO_REDIRECT_URL"],
-            "grant_type": "authorization_code",
-        },
-        headers={
-            "Authorization": "Basic " + os.environ["SSO_AUTHORIZATION_HEADER_B64"],
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-        timeout=10,
-    )
-    token_res = token_res.json()
-
-    # Ensure we have the access token
-    if "access_token" not in token_res:
-        response.status_code = 400
-        return {"error": "unable to retrieve access token"}
-
-    # Get the user's profile
-    profile_res = requests.get(
-        os.environ["SSO_PROFILE_URL"],
-        headers={"Authorization": "Bearer " + token_res["access_token"]},
-        timeout=10,
-    )
-    profile_res = profile_res.json()
-
-    # Ensure we have all the required fields
-    if not all(
-        field in profile_res
-        for field in [
-            "id",
-            "username",
-            "first_name",
-            "last_name",
-            "email",
-            "roll_number",
-        ]
-    ):
-        response.status_code = 400
-        return {"error": "all field were not present in the response"}
-
-    user = db_user.get_user_by_id(profile_res["id"])
+async def login(input: LoginInput, response: Response):
+    user = await db.user.get_user_by_username(input.username)
     if user is None:
-        user = db_user.User(
-            id=profile_res["id"],
-            username=profile_res["username"],
-            name=profile_res["first_name"] + " " + profile_res["last_name"],
-            email=profile_res["email"],
-            roll_number=profile_res["roll_number"],
+        raise HTTPException(
+            status_code=401,
+            detail="Either a user with that username does not exist or the password is incorrect",
         )
-        db_user.create_user(user)
 
-    session = db_session.Session(
+    if not argon2.verify_password(input.password.encode(), user.password):
+        raise HTTPException(
+            status_code=401,
+            detail="Either a user with that username does not exist or the password is incorrect",
+        )
+
+    session = db.session.Session(
         user_id=user.id,
         expires_at=datetime.datetime.now() + datetime.timedelta(days=7),
     )
-    db_session.create(session)
+    await db.session.create(session)
 
     response.set_cookie(
         config.COOKIE_NAME,
@@ -89,6 +56,7 @@ async def login(code: str, response: Response):
         max_age=60 * 60 * 24 * 7,
         httponly=True,
     )
+    del user.password
     return {"user": user}
 
 
@@ -100,11 +68,11 @@ async def logout(
     if session_id is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    db_session.delete(uuid.UUID(session_id))
+    await db.session.delete(uuid.UUID(session_id))
     res.delete_cookie(config.COOKIE_NAME)
     return {"success": True}
 
 
 @router.get("/me")
-async def me(user: Annotated[db_user.User, Depends(helpers.get_user)]):
+async def me(user: Annotated[db.user.User, Depends(helpers.get_user)]):
     return {"user": user}

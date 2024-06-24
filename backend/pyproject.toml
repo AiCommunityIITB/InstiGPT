@@ -7,22 +7,20 @@ readme = "../README.md"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-langchain = "^0.1.5"
-langchain-community = "^0.0.17"
-langchain-google-genai = "^0.0.6"
+langchain = "^0.2.5"
+langchain-community = "^0.2.5"
+langchain-openai = "^0.1.8"
 google-api-python-client = "^2.116.0"
-chromadb-client = "^0.4.23.dev0"
 fastapi = { extras = ["all"], version = "^0.109.0" }
 uvicorn = "^0.27.0.post1"
 python-dotenv = "^1.0.1"
-sqlmodel = "^0.0.14"
-psycopg2-binary = "^2.9.9"
 beautifulsoup4 = "^4.12.3"
 lxml = "^5.1.0"
 requests = "^2.31.0"
 pypdf = "^4.0.1"
 rich = "^13.7.0"
-
+beanie = "^1.26.0"
+argon2-cffi = "^23.1.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.1.1"

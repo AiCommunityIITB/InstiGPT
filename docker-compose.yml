@@ -7,37 +7,6 @@ services:
     build:
       context: ./backend
       dockerfile: ./Dockerfile
-    depends_on:
-      - vector_db
-      - relational_db
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  vector_db:
-    image: chromadb/chroma:latest
-    command: uvicorn chromadb.app:app --workers 1 --host 0.0.0.0 --port 8000 --proxy-headers --log-config chromadb/log_config.yml
-    restart: always
-    environment:
-      - IS_PERSISTENT=TRUE
-      - ALLOW_RESET=TRUE
-    volumes:
-      - ./embeddings:/chroma/chroma
-    logging:
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  relational_db:
-    image: postgres:latest
-    restart: always
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-    volumes:
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
-      - ./db/data:/var/lib/postgresql/data
     logging:
       options:
         max-size: "10m"

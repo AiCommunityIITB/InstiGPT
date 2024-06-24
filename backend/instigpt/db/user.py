@@ -1,27 +1,24 @@
 from typing import Optional
+import uuid
 
-from sqlmodel import SQLModel, Field, Session, select
-
-from . import get_engine
-
-
-class User(SQLModel, table=True):
-    id: int = Field(primary_key=True, description="The ID of the user (from gymkhana)")
-    username: str = Field(description="The username of the user (from gymkhana)")
-    name: str = Field(description="The name of the user (from gymkhana)")
-    email: str = Field(description="The email of the user (from gymkhana)")
-    roll_number: str = Field(description="The roll number of the user (from gymkhana)")
+from pydantic import Field
+from beanie import Document
 
 
-def get_user_by_id(id: int) -> Optional[User]:
-    with Session(get_engine()) as session:
-        statement = select(User).where(User.id == id)
-        user = session.exec(statement).first()
+class User(Document):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    username: str
+    password: bytes
+    name: str
 
-    return user
+
+async def get_user_by_id(id: uuid.UUID) -> Optional[User]:
+    return await User.find_one(User.id == id)
 
 
-def create_user(user: User):
-    with Session(get_engine(), expire_on_commit=False) as session:
-        session.add(user)
-        session.commit()
+async def get_user_by_username(username: str) -> Optional[User]:
+    return await User.find_one(User.username == username)
+
+
+async def create_user(user: User) -> None:
+    await user.insert()

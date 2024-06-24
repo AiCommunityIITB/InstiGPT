@@ -1,32 +1,10 @@
-from typing import Sequence, List
+from typing import Annotated, Optional, Sequence, List
 import enum
 from datetime import datetime
 import uuid
 
-from sqlmodel import SQLModel, Field, Relationship, Session, select
-from sqlalchemy import Uuid, Enum
-
-from . import get_engine
-
-
-class Conversation(SQLModel, table=True):
-    id: uuid.UUID = Field(
-        sa_type=Uuid(as_uuid=True),
-        default_factory=uuid.uuid4,
-        primary_key=True,
-        description="The id of the conversation",
-    )
-    title: str = Field(description="The title of the conversation")
-    owner_id: int = Field(
-        description="The ID of the user that the conversation belongs to",
-        foreign_key="user.id",
-    )
-    created_at: datetime = Field(
-        description="The time when the conversation was created",
-        default_factory=datetime.now,
-    )
-
-    messages: List["Message"] = Relationship(back_populates="conversation")
+from pydantic import BaseModel, Field
+from beanie import Document, Indexed
 
 
 class MessageRole(enum.Enum):
@@ -34,86 +12,74 @@ class MessageRole(enum.Enum):
     USER = "user"
 
 
-class Message(SQLModel, table=True):
-    id: uuid.UUID = Field(
-        sa_type=Uuid(as_uuid=True),
-        default_factory=uuid.uuid4,
-        primary_key=True,
-        description="The id of the message",
-    )
-    content: str = Field(description="The title of the conversation")
+class Message(BaseModel):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    content: str
     role: MessageRole = Field(
-        sa_type=Enum(MessageRole),
         description="The role of the user that sent the message",
     )
-    created_at: datetime = Field(
-        description="The time when the message was created",
-        default_factory=datetime.now,
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
+class Conversation(Document):
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    title: str
+    owner_id: Annotated[uuid.UUID, Indexed]
+    created_at: datetime = Field(default_factory=datetime.now)
+    messages: List[Message]
+
+
+class ConversationShortView(BaseModel):
+    id: uuid.UUID
+    title: str
+    created_at: datetime
+
+
+async def get_conversations_of_user(user_id: uuid.UUID) -> Sequence[Conversation]:
+    return (
+        await Conversation.find_many(Conversation.owner_id == user_id)
+        .project(ConversationShortView)
+        .to_list()
     )
 
-    conversation_id: uuid.UUID = Field(
-        description="The ID of the conversation that the message belongs to",
-        foreign_key="conversation.id",
-    )
-    conversation: Conversation = Relationship(back_populates="messages")
+
+async def get_messages_of_conversation(conversation_id: uuid.UUID) -> Sequence[Message]:
+    conversation = await Conversation.find_one(Conversation.id == conversation_id)
+    if conversation is None:
+        return []
+
+    return conversation.messages
 
 
-def get_conversations_of_user(user_id: int) -> Sequence[Conversation]:
-    with Session(get_engine()) as session:
-        statement = select(Conversation).where(Conversation.owner_id == user_id)
-        conversations = session.exec(statement).all()
-
-    return conversations
+async def create_conversation(conversation: Conversation) -> None:
+    await conversation.insert()
 
 
-def get_messages_of_conversation(conversation_id: uuid.UUID) -> Sequence[Message]:
-    with Session(get_engine()) as session:
-        statement = (
-            select(Message)
-            .where(Message.conversation_id == conversation_id)
-            .order_by(Message.created_at)  # type: ignore
-        )
-        messages = session.exec(statement).all()
+async def update_conversation(
+    conversation_id: uuid.UUID, new_title: str
+) -> Optional[Conversation]:
+    conversation = await Conversation.find_one(Conversation.id == conversation_id)
+    if not conversation:
+        return
 
-    return messages
+    conversation.title = new_title
+    await conversation.save()
 
-
-def create_conversation(conversation: Conversation):
-    with Session(get_engine(), expire_on_commit=False) as session:
-        session.add(conversation)
-        session.commit()
+    del conversation.messages
+    return conversation
 
 
-def update_conversation(conversation_id: uuid.UUID, new_title: str):
-    with Session(get_engine(), expire_on_commit=False) as session:
-        statement = select(Conversation).where(Conversation.id == conversation_id)
-        conversation = session.exec(statement).first()
-        if conversation is None:
-            return
-
-        conversation.title = new_title
-        session.add(conversation)
-        session.commit()
-
-        return conversation
+async def delete_conversation(conversation_id: uuid.UUID):
+    conversation = await Conversation.find_one(Conversation.id == conversation_id)
+    if not conversation:
+        return
+    conversation.delete()
 
 
-def delete_conversation(conversation_id: uuid.UUID):
-    with Session(get_engine()) as session:
-        statement = select(Conversation).where(Conversation.id == conversation_id)
-        conversation = session.exec(statement).first()
-        if conversation is None:
-            return
+async def create_message(conversation_id: uuid.UUID, message: Message):
+    conversation = await Conversation.find_one(Conversation.id == conversation_id)
+    if not conversation:
+        return
 
-        statement = select(Message).where(Message.conversation_id == conversation_id)
-        messages = session.exec(statement).all()
-
-        [session.delete(message) for message in messages]
-        session.delete(conversation)
-        session.commit()
-
-
-def create_message(message: Message):
-    with Session(get_engine(), expire_on_commit=False) as session:
-        session.add(message)
-        session.commit()
+    conversation.messages.append(message)
+    await conversation.save()
