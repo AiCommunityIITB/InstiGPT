@@ -30,15 +30,46 @@ export const ApiProvider: FC<ApiProviderProps> = ({ children }) => (
   <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
 );
 
+interface RegisterMutationVariables {
+  name: string;
+  username: string;
+  password: string;
+}
+interface RegisterMutationResponse {
+  user?: User;
+  detail?: string;
+}
+export const useRegisterMutation = () =>
+  useMutation<RegisterMutationResponse, Error, RegisterMutationVariables>(
+    (vars) =>
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/register`, {
+        method: "POST",
+        body: JSON.stringify(vars),
+        credentials: "include",
+        headers: {
+          "content-type": "application/json",
+        },
+      }).then((res) => res.json()),
+  );
+
+interface LoginMutationVariables {
+  username: string;
+  password: string;
+}
 interface LoginMutationResponse {
   user?: User;
   detail?: string;
 }
 export const useLoginMutation = () =>
-  useMutation<LoginMutationResponse, Error, string>(
-    (code: string) =>
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/login?code=${code}`, {
+  useMutation<LoginMutationResponse, Error, LoginMutationVariables>(
+    (vars) =>
+      fetch(`${process.env.NEXT_PUBLIC_API_URL}/login`, {
+        method: "POST",
+        body: JSON.stringify(vars),
         credentials: "include",
+        headers: {
+          "content-type": "application/json",
+        },
       }).then((res) => res.json()),
     {
       onSuccess: (data) => {

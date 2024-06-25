@@ -11,25 +11,26 @@ from . import helpers
 from .input_models import RegisterInput, LoginInput
 
 router = APIRouter()
+hasher = argon2.PasswordHasher()
 
 
-@router.get("/register")
+@router.post("/register")
 async def register(input: RegisterInput):
-    user = db.user.get_user_by_username(input.username)
+    user = await db.user.get_user_by_username(input.username)
     if user is not None:
         raise HTTPException(status_code=400, detail="User already exists")
 
     user = db.user.User(
         username=input.username,
-        password=argon2.hash_password(input.password.encode()),
+        password=hasher.hash(input.password),
         name=input.name,
     )
     await db.user.create_user(user)
 
-    return JSONResponse(status_code=204)
+    return JSONResponse({"success": True}, status_code=204)
 
 
-@router.get("/login")
+@router.post("/login")
 async def login(input: LoginInput, response: Response):
     user = await db.user.get_user_by_username(input.username)
     if user is None:
@@ -38,7 +39,12 @@ async def login(input: LoginInput, response: Response):
             detail="Either a user with that username does not exist or the password is incorrect",
         )
 
-    if not argon2.verify_password(input.password.encode(), user.password):
+    try:
+        hasher.verify(user.password, input.password)
+
+        if hasher.check_needs_rehash(user.password):
+            db.user.update_user_password(user.id, hasher.hash(input.password))
+    except argon2.exceptions.VerifyMismatchError:
         raise HTTPException(
             status_code=401,
             detail="Either a user with that username does not exist or the password is incorrect",
@@ -75,4 +81,5 @@ async def logout(
 
 @router.get("/me")
 async def me(user: Annotated[db.user.User, Depends(helpers.get_user)]):
+    del user.password
     return {"user": user}

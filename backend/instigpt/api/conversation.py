@@ -32,7 +32,7 @@ async def create_conversation(
     input: CreateConversationInput,
     user: Annotated[db.user.User, Depends(helpers.get_user)],
 ):
-    conversation = await db.conversation.Conversation(
+    conversation = db.conversation.Conversation(
         title=input.title,
         owner_id=user.id,
     )

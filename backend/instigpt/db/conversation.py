@@ -26,13 +26,16 @@ class Conversation(Document):
     title: str
     owner_id: Annotated[uuid.UUID, Indexed]
     created_at: datetime = Field(default_factory=datetime.now)
-    messages: List[Message]
+    messages: List[Message] = Field(default_factory=list)
 
 
 class ConversationShortView(BaseModel):
     id: uuid.UUID
     title: str
     created_at: datetime
+
+    class Settings:
+        projection = {"id": "$_id", "title": 1, "created_at": 1}
 
 
 async def get_conversations_of_user(user_id: uuid.UUID) -> Sequence[Conversation]:
@@ -66,7 +69,7 @@ async def update_conversation(
     await conversation.save()
 
     del conversation.messages
-    return conversation
+    return ConversationShortView(conversation)
 
 
 async def delete_conversation(conversation_id: uuid.UUID):

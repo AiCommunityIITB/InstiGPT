@@ -1,5 +1,6 @@
 import datetime
 from typing import Annotated
+import uuid
 from fastapi import Cookie, HTTPException
 
 from instigpt import config, db
@@ -11,7 +12,7 @@ async def get_user(
     if session_id is None:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-    session = await db.session.get_by_id(session_id)
+    session = await db.session.get_by_id(uuid.UUID(session_id))
     if session is None or session.expires_at < datetime.datetime.now():
         raise HTTPException(status_code=401, detail="Unauthorized")
 

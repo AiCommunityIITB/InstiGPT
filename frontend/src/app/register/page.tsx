@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { LoadingIndicator, LogoWithText } from "@/components";
 import { useMeQuery } from "@/lib";
-import { LoginForm } from "./login-form";
+import { RegisterForm } from "./register-form";
 
 export default function Login() {
   const router = useRouter();
@@ -18,11 +18,11 @@ export default function Login() {
       <div className="grid h-screen w-screen place-items-center px-10">
         <div className="flex flex-col items-center space-y-8 rounded-xl bg-background-alt p-10">
           <LogoWithText className="h-24" />
-          <LoginForm />
+          <RegisterForm />
           <span className="text-xs">
-            Don&apos;t have an account?{" "}
-            <Link href="/register" className="underline underline-offset-2">
-              Register
+            Already have an account?{" "}
+            <Link href="/login" className="underline underline-offset-2">
+              Login
             </Link>
           </span>
         </div>
