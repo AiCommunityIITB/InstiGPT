@@ -10,7 +10,7 @@ def get_embeddings() -> Embeddings:
     embeddings = AzureOpenAIEmbeddings(
         model=config.EMBEDDING_MODEL,
         azure_endpoint=os.environ["OPENAI_API_ENDPOINT"],
-        api_key=os.environ["OPENAI_API_KEY"],
+        api_key=os.environ["OPENAI_API_KEY"],  # type: ignore
         api_version=os.environ["OPENAI_API_VERSION"],
     )
 

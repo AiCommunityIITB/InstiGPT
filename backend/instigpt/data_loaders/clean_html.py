@@ -5,7 +5,6 @@ import requests
 import urllib3
 from urllib3.exceptions import InsecureRequestWarning
 
-from chromadb.api import ClientAPI
 from langchain_core.embeddings import Embeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from bs4 import BeautifulSoup
@@ -72,54 +71,54 @@ def get_responses(links: list[str]) -> list[requests.Response]:
     return responses
 
 
-def load_html_data(
-    client: ClientAPI,
-    embeddings: Embeddings,
-    data_path: Union[str, list[str]],
-) -> int:
-    """Fetches the html content from the link(s), extracts requried content and
-    then stores it in the database along with its embeddings.
+# def load_html_data(
+#     client: ClientAPI,
+#     embeddings: Embeddings,
+#     data_path: Union[str, list[str]],
+# ) -> int:
+#     """Fetches the html content from the link(s), extracts requried content and
+#     then stores it in the database along with its embeddings.
 
-    returns: int: number of dicuments stored in the database
-    """
-    if type(data_path) == str:
-        data_path = [data_path]
+#     returns: int: number of dicuments stored in the database
+#     """
+#     if type(data_path) == str:
+#         data_path = [data_path]
 
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=2000,
-        chunk_overlap=200,
-        length_function=len,
-        is_separator_regex=True,
-    )
-    coll = client.get_or_create_collection(config.COLLECTION_NAME)
-    num_docs_added = 0
+#     text_splitter = RecursiveCharacterTextSplitter(
+#         chunk_size=2000,
+#         chunk_overlap=200,
+#         length_function=len,
+#         is_separator_regex=True,
+#     )
+#     coll = client.get_or_create_collection(config.COLLECTION_NAME)
+#     num_docs_added = 0
 
-    for res in get_responses(data_path):  # type: ignore
-        if res is None:
-            continue
-        try:
-            html = res.text
-            soup = BeautifulSoup(html, "lxml")
-            if soup.body is None:
-                continue
-            content = "\n".join([get_content(child) for child in soup.body.children])  # type: ignore
-            content = re.sub(r"\s{2,}", "\n", content)
-            docs = text_splitter.split_text(content)
-            docs = [doc for doc in docs if not has_unrecognized_characters(doc)]
-            metadatas = [{"source": res.url} for _ in range(len(docs))]
-            ids = [f"{res.url}-{i}" for i in range(len(docs))]
-        except AssertionError:
-            continue
+#     for res in get_responses(data_path):  # type: ignore
+#         if res is None:
+#             continue
+#         try:
+#             html = res.text
+#             soup = BeautifulSoup(html, "lxml")
+#             if soup.body is None:
+#                 continue
+#             content = "\n".join([get_content(child) for child in soup.body.children])  # type: ignore
+#             content = re.sub(r"\s{2,}", "\n", content)
+#             docs = text_splitter.split_text(content)
+#             docs = [doc for doc in docs if not has_unrecognized_characters(doc)]
+#             metadatas = [{"source": res.url} for _ in range(len(docs))]
+#             ids = [f"{res.url}-{i}" for i in range(len(docs))]
+#         except AssertionError:
+#             continue
 
-        if len(ids) == 0:
-            continue
+#         if len(ids) == 0:
+#             continue
 
-        coll.add(
-            documents=docs,
-            embeddings=embeddings.embed_documents(docs),  # type: ignore
-            metadatas=list(metadatas),
-            ids=ids,
-        )
-        num_docs_added += len(docs)
+#         coll.add(
+#             documents=docs,
+#             embeddings=embeddings.embed_documents(docs),  # type: ignore
+#             metadatas=list(metadatas),
+#             ids=ids,
+#         )
+#         num_docs_added += len(docs)
 
-    return num_docs_added
+#     return num_docs_added

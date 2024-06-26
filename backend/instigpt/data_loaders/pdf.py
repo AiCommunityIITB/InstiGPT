@@ -1,11 +1,10 @@
 from typing import Optional
 
-from chromadb.api import ClientAPI
 from langchain_core.embeddings import Embeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 
-from instigpt import config
+from instigpt import db
 
 
 def extract_pdf_content(link: str) -> Optional[str]:
@@ -19,8 +18,7 @@ def extract_pdf_content(link: str) -> Optional[str]:
     return "\n".join([doc.page_content for doc in docs])
 
 
-def load_pdf_data(
-    client: ClientAPI,
+async def load_pdf_data(
     embeddings: Embeddings,
     document_name: str,
     data_path: str,
@@ -50,18 +48,19 @@ def load_pdf_data(
     docs = text_splitter.create_documents(docs)
     docs = [doc.page_content for doc in docs]
 
-    ids = [f"{document_name}-{i}" for i in range(len(docs))]
-    metadatas = [{"source": document_name} for _ in range(len(docs))]
-
-    if len(ids) == 0:
+    if len(docs) == 0:
         return 0
 
-    coll = client.get_or_create_collection(config.COLLECTION_NAME)
-    coll.add(
-        documents=docs,
-        embeddings=embeddings.embed_documents(docs),  # type: ignore
-        metadatas=list(metadatas),
-        ids=ids,
+    vectors = embeddings.embed_documents(docs)
+    await db.document.create_docuements(
+        [
+            db.Document(
+                content=docs[i],
+                metadata={"source": document_name},
+                vector=vectors[i],
+            )
+            for i in range(len(docs))
+        ]
     )
 
     return len(docs)
