@@ -6,7 +6,7 @@ from beanie import Document
 
 
 class User(Document):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)  # type: ignore
     username: str
     password: str
     name: str
@@ -26,5 +26,8 @@ async def create_user(user: User) -> None:
 
 async def update_user_password(id: uuid.UUID, new_password: str) -> None:
     user = await get_user_by_id(id)
+    if user is None:
+        return
+
     user.password = new_password
     await user.save()

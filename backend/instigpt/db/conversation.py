@@ -22,7 +22,7 @@ class Message(BaseModel):
 
 
 class Conversation(Document):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)  # type: ignore
     title: str
     owner_id: Annotated[uuid.UUID, Indexed]
     created_at: datetime = Field(default_factory=datetime.now)
@@ -35,7 +35,9 @@ class ConversationShortView(BaseModel):
     created_at: datetime
 
 
-async def get_conversations_of_user(user_id: uuid.UUID) -> Sequence[Conversation]:
+async def get_conversations_of_user(
+    user_id: uuid.UUID,
+) -> Sequence[ConversationShortView]:
     return (
         await Conversation.find_many(Conversation.owner_id == user_id)
         .project(ConversationShortView)

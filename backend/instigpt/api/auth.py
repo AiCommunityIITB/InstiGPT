@@ -43,7 +43,7 @@ async def login(input: LoginInput, response: Response):
         hasher.verify(user.password, input.password)
 
         if hasher.check_needs_rehash(user.password):
-            db.user.update_user_password(user.id, hasher.hash(input.password))
+            await db.user.update_user_password(user.id, hasher.hash(input.password))
     except argon2.exceptions.VerifyMismatchError:
         raise HTTPException(
             status_code=401,

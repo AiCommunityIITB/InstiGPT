@@ -7,7 +7,7 @@ from beanie import Document, Indexed
 
 
 class Session(Document):
-    id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    id: uuid.UUID = Field(default_factory=uuid.uuid4)  # type: ignore
     user_id: Annotated[uuid.UUID, Indexed]
     expires_at: datetime = Field(description="The time when the session expires")
 
