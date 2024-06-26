@@ -210,7 +210,7 @@ export const useEditConversationMutation = () =>
               }
               const conversations = [...prevData.conversations];
               const index = conversations.findIndex(
-                (c) => c.id === data.conversation!.id,
+                (c) => c._id === data.conversation!._id,
               );
               if (index !== undefined && index !== -1) {
                 conversations[index] = data.conversation!;

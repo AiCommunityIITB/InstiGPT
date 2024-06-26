@@ -30,12 +30,9 @@ class Conversation(Document):
 
 
 class ConversationShortView(BaseModel):
-    id: uuid.UUID
+    id: uuid.UUID = Field(alias="_id")
     title: str
     created_at: datetime
-
-    class Settings:
-        projection = {"id": "$_id", "title": 1, "created_at": 1}
 
 
 async def get_conversations_of_user(user_id: uuid.UUID) -> Sequence[Conversation]:
@@ -69,14 +66,14 @@ async def update_conversation(
     await conversation.save()
 
     del conversation.messages
-    return ConversationShortView(conversation)
+    return conversation
 
 
 async def delete_conversation(conversation_id: uuid.UUID):
     conversation = await Conversation.find_one(Conversation.id == conversation_id)
     if not conversation:
         return
-    conversation.delete()
+    await conversation.delete()
 
 
 async def create_message(conversation_id: uuid.UUID, message: Message):

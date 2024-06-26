@@ -84,7 +84,7 @@ export const NavbarContent: FC<NavbarContentProps> = ({ closeNavbar }) => {
               </h4>
               {convs.map((conversation) => (
                 <NavbarConversationItem
-                  key={conversation.id}
+                  key={conversation._id}
                   conversation={conversation}
                   closeNavbar={closeNavbar}
                 />

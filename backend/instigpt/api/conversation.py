@@ -50,7 +50,7 @@ async def delete_conversation(
 
 
 @router.patch("/conversation/{conversation_id}")
-async def updaet_conversation(
+async def update_conversation(
     conversation_id: str,
     input: CreateConversationInput,
     _user: Annotated[db.user.User, Depends(helpers.get_user)],

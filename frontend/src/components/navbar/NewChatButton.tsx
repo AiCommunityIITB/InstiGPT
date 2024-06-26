@@ -28,7 +28,7 @@ export const NewChatButton: FC<NewChatButtonProps> = ({ close }) => {
               if (data?.conversation === undefined) return;
 
               close?.();
-              router.push(`/conversation/${data?.conversation.id}`);
+              router.push(`/conversation/${data?.conversation._id}`);
             },
           })
         }

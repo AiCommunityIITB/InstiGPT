@@ -49,9 +49,9 @@ export const NavbarConversationItem: FC<NavbarConversationItemProps> = ({
       />
       <Link
         onMouseLeave={() => setConfirmDelete(false)}
-        href={`/conversation/${conversation.id}`}
+        href={`/conversation/${conversation._id}`}
         className={`group flex h-10 flex-none items-center gap-1.5 rounded-lg pl-2.5 pr-2 text-gray-300 hover:bg-gray-700 ${
-          conversation.id === (conversationId as string) ? "bg-primary/50" : ""
+          conversation._id === (conversationId as string) ? "bg-primary/50" : ""
         }`}
         onClick={() => closeNavbar()}
       >
@@ -69,10 +69,10 @@ export const NavbarConversationItem: FC<NavbarConversationItemProps> = ({
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                deleteConversation.mutate(conversation.id, {
+                deleteConversation.mutate(conversation._id, {
                   onSuccess: () => {
                     setConfirmDelete(false);
-                    if (conversation.id === conversationId) {
+                    if (conversation._id === conversationId) {
                       router.push("/");
                     }
                   },
@@ -104,7 +104,7 @@ export const NavbarConversationItem: FC<NavbarConversationItemProps> = ({
               description={`You are editing the conversation with the title: ${conversation.title}`}
               onSubmit={(newTitle) => {
                 if (newTitle !== null && newTitle !== "") {
-                  editConversation.mutate({ id: conversation.id, newTitle });
+                  editConversation.mutate({ id: conversation._id, newTitle });
                 }
                 setIsModalOpen(false);
               }}

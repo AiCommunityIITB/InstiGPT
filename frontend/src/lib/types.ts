@@ -1,13 +1,11 @@
 export type User = {
-  id: number;
+  _id: number;
   username: string;
   name: string;
-  email: string;
-  roll_number: string;
 };
 
 export type Conversation = {
-  id: string;
+  _id: string;
   title: string;
   owner_id: number;
   created_at: string;
