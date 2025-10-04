@@ -15,6 +15,11 @@ from instigpt import config
 import os
 
 def get_embeddings() -> Embeddings:
+     # login to huggingface hub to access private models
+    # login(os.environ["HUGGINGFACE_API_KEY"])
+
+    # embeddings = HuggingFaceEmbeddings(model_name=config.EMBEDDING_MODEL, model_kwargs = {'device': 'cpu'})
+    # embeddings = GoogleGenerativeAIEmbeddings(model=config.EMBEDDING_MODEL)  # type: ignore
     try:
         voyage_api_key = os.environ["VOYAGE_API_KEY"]
         if not voyage_api_key:
