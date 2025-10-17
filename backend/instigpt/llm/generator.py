@@ -1,5 +1,6 @@
 from typing import TypedDict, Generator
 import re
+import os 
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate, ChatPromptTemplate
@@ -16,6 +17,11 @@ debug_config: RunnableConfig = {"callbacks": [ConsoleCallbackHandler()]}
 
 
 def get_generator_model():
+    google_api_key = os.getenv("GOOGLE_API_KEY")
+    if not google_api_key:
+        print("Error: GOOGLE_API_KEY is missing. Please set it in environment variables.")
+        return None  # or raise an exception, or handle as needed
+    
     return ChatGoogleGenerativeAI(
         model=config.GENERATOR_MODEL,
         temperature=config.GENERATOR_TEMPERATURE,
@@ -85,6 +91,8 @@ def get_chain(
     search_results_retriever: Generator[Tool, None, None],
 ) -> Runnable[ChainInput, str]:
     # https://python.langchain.com/docs/expression_language/cookbook/retrieval
+    if llm is None:
+        raise RuntimeError("LLM model is not initialized. Cannot build chains.")
 
     question_condenser = CONDENSE_QUESTION_PROMPT | llm | StrOutputParser()
     final_answer = ANSWER_PROMPT | llm | StrOutputParser()
