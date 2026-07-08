@@ -9,7 +9,7 @@ export interface Config {
   supabaseUrl: string;
   supabaseAnonKey: string;
   supabaseServiceKey: string;
-  groqApiKey: string;
+  geminiApiKey: string;
   sso: {
     clientId: string;
     clientSecret: string;
@@ -25,7 +25,7 @@ export function createConfig(env: Env): Config {
     supabaseUrl: env.SUPABASE_URL,
     supabaseAnonKey: env.SUPABASE_ANON_KEY,
     supabaseServiceKey: env.SUPABASE_SERVICE_ROLE_KEY,
-    groqApiKey: env.GROQ_API_KEY,
+    geminiApiKey: env.GEMINI_API_KEY,
     sso: {
       clientId: env.SSO_CLIENT_ID,
       clientSecret: env.SSO_CLIENT_SECRET,

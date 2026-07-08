@@ -7,7 +7,7 @@ import { streamSSE } from "hono/streaming";
 import type { Env, UserContext } from "../../types";
 import { createConfig } from "../../config";
 import { createSupabase, createMessageStore, createConversationStore } from "../../infra/db/supabase";
-import { createGroqLLM } from "../../infra/llm/groq";
+import { createGeminiLLM } from "../../infra/llm/gemini";
 import { createCFEmbedding, createLocalEmbedding } from "../../infra/embeddings/cloudflare";
 import { createHybridSearch } from "../../infra/search/hybrid";
 import { createDDGSearch } from "../../infra/search/web";
@@ -37,7 +37,7 @@ chatRoutes.post("/", async (c) => {
 
   // Wire up dependencies (this is the composition root for this request)
   const deps = {
-    llm: createGroqLLM(config.groqApiKey),
+    llm: createGeminiLLM(config.geminiApiKey),
     search: createHybridSearch(sb),
     embedding: c.env.AI ? createCFEmbedding(c.env.AI) : createLocalEmbedding(),
     webSearch: createDDGSearch(),
