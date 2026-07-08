@@ -124,7 +124,7 @@ export async function* chat(
   yield {
     type: "sources",
     sources: allSources
-      .filter((s) => s.relevance_score >= 0.3)
+      .filter((s) => s.relevance_score >= 0.5)
       .slice(0, 5)
       .map((s) => ({
         ...s,

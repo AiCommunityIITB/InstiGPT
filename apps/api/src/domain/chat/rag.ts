@@ -221,8 +221,11 @@ export async function ragPipeline(input: RAGInput): Promise<RAGResult> {
   // 4. Heuristic re-ranking (fast, no LLM)
   const reranked = rerankHeuristic(rawSources, query);
 
-  // 5. Smart context assembly (fit within token budget)
-  const assembled = assembleContext(reranked);
+  // 5. Filter out low-relevance noise before assembly
+  const relevant = reranked.filter((s) => s.relevance_score >= 0.4);
+
+  // 6. Smart context assembly (fit within token budget)
+  const assembled = assembleContext(relevant.length > 0 ? relevant : reranked.slice(0, 3));
 
   return {
     sources: assembled,
