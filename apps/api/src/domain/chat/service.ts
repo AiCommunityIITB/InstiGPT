@@ -110,14 +110,15 @@ export async function* chat(
   }
 
   // 4. Embed the search query
-  const queryEmbedding = await deps.embedding.embed(searchQuery);
-
-  // 5. Skip retrieval for casual/greeting messages
+  // 4. Skip retrieval for casual/greeting messages
   const isCasual = searchQuery.split(" ").length <= 4 &&
     /^(hi|hello|hey|how are you|thanks|thank you|okay|ok|bye|good|fine|nice|great|sup|yo)/i.test(searchQuery.trim());
 
   let allSources: Source[] = [];
+  let queryEmbedding: number[] = [];
+
   if (!isCasual) {
+    queryEmbedding = await deps.embedding.embed(searchQuery);
     const [ragSources, webSources] = await Promise.all([
       deps.search.search(queryEmbedding, searchQuery, 8),
       deps.webSearch.search(searchQuery, 3),

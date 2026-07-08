@@ -71,10 +71,14 @@ function AssistantBlock({ message }: { message: MsgType }) {
 }
 
 /**
- * Minimal preprocessing for LLM output.
- * Only ensures list items have blank lines before them so markdown parses correctly.
+ * Fix LLM output that runs sentences together without line breaks.
+ * Adds paragraph breaks after sentences that end with period/question mark
+ * followed by a capital letter (new sentence).
  */
 function fixMarkdown(text: string): string {
-  // Ensure a blank line exists before any line starting with "- "
-  return text.replace(/([^\n])\n(- )/g, "$1\n\n$2");
+  return text
+    // Add line break between sentences (period + space + Capital letter)
+    .replace(/([.!?])\s*([A-Z])/g, "$1\n\n$2")
+    // Ensure a blank line exists before any line starting with "- "
+    .replace(/([^\n])\n(- )/g, "$1\n\n$2");
 }
