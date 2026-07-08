@@ -123,10 +123,12 @@ export async function* chat(
 
   // Only show sources to user when retrieval is confident
   const displaySources = ragResult.confidence === "high" || ragResult.confidence === "medium"
-    ? allSources.slice(0, 5).map((s) => ({
-        ...s,
-        content_snippet: s.content_snippet.slice(0, 200),
-      }))
+    ? deduplicateSources(allSources)
+        .slice(0, 5)
+        .map((s) => ({
+          ...s,
+          content_snippet: s.content_snippet.slice(0, 200),
+        }))
     : [];
 
   yield { type: "sources", sources: displaySources };
@@ -239,6 +241,16 @@ Format:
   }
 
   return prompt;
+}
+
+function deduplicateSources(sources: Source[]): Source[] {
+  const seen = new Set<string>();
+  return sources.filter((s) => {
+    const key = s.title.toLowerCase().trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function buildCondensePrompt(question: string, history: Message[]): string {
