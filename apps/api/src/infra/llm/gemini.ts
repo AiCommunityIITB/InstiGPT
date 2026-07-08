@@ -64,6 +64,20 @@ export function createGeminiLLM(apiKey: string): LLMPort {
           }
         }
       }
+
+      // Process any remaining data in the buffer
+      if (buffer.startsWith("data: ")) {
+        const data = buffer.slice(6);
+        if (data && data !== "[DONE]") {
+          try {
+            const parsed = JSON.parse(data);
+            const text = parsed?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) yield text;
+          } catch {
+            // Skip malformed JSON
+          }
+        }
+      }
     },
 
     async complete(prompt) {

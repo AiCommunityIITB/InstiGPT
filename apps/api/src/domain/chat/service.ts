@@ -128,10 +128,13 @@ export async function* chat(
 
   yield {
     type: "sources",
-    sources: allSources.slice(0, 5).map((s) => ({
-      ...s,
-      content_snippet: s.content_snippet.slice(0, 200),
-    })),
+    sources: allSources
+      .filter((s) => s.relevance_score >= 0.3)
+      .slice(0, 5)
+      .map((s) => ({
+        ...s,
+        content_snippet: s.content_snippet.slice(0, 200),
+      })),
   };
 
   // 6. Build prompt
