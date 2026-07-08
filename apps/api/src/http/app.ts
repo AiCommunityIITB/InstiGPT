@@ -20,7 +20,11 @@ export function createApp() {
   app.use(
     "*",
     cors({
-      origin: ["http://localhost:3000", "https://instigpt.vercel.app"],
+      origin: [
+      "http://localhost:3000",
+      "https://instigpt.vercel.app",
+      "https://insti-gpt-web.vercel.app",
+    ],
       credentials: true,
       allowMethods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization"],
