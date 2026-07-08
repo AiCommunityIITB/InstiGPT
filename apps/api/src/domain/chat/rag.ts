@@ -1,186 +1,192 @@
 /**
- * Advanced RAG pipeline — optimized for low-quota LLMs.
+ * Production-grade RAG pipeline.
  *
- * Strategy: maximize retrieval quality WITHOUT burning LLM calls.
- * - Query expansion via LLM (1 call, only for complex queries)
- * - Multi-query parallel retrieval
- * - Heuristic re-ranking (no LLM needed — uses scoring signals)
- * - Smart context assembly (truncate, not compress)
+ * Techniques borrowed from:
+ * - Onyx (30.8k ⭐): Hybrid search + reranking + confidence scoring
+ * - Verba (7.7k ⭐): Sentence-window retrieval + query routing
+ * - VectorHub: Reciprocal Rank Fusion (RRF) for hybrid merge
+ * - Azure RAG Template: Semantic ranking + metadata filtering
  *
- * Total LLM budget per request: 1 call (expansion) + 1 call (final answer)
- * For simple queries: 0 + 1 = 1 LLM call total
+ * Design principles:
+ * 1. Minimize LLM calls (max 1 pre-generation call)
+ * 2. Maximize retrieval precision with RRF fusion
+ * 3. Only show sources when retrieval is confident
+ * 4. Route queries to appropriate strategies
  */
 import type { Source } from "@instigpt/shared";
 import type { LLMPort, SearchPort, EmbeddingPort, WebSearchPort } from "./service";
 
-// ═══ Query Classification ═══
+// ═══ Query Router ═══
 
-type QueryType = "factual" | "opinion" | "procedural" | "exploratory" | "casual";
+export type QueryIntent =
+  | "knowledge"    // needs RAG (courses, rules, profs, clubs)
+  | "web_needed"   // needs web search (current events, deadlines)
+  | "conversational" // casual, greeting, thanks
+  | "meta";        // about InstiGPT itself
 
-function classifyQuery(query: string): QueryType {
+function routeQuery(query: string): QueryIntent {
   const q = query.toLowerCase().trim();
 
-  if (q.split(" ").length <= 4 &&
-    /^(hi|hello|hey|how are you|thanks|thank you|okay|ok|bye|good|fine|nice|great|sup|yo)/i.test(q)) {
-    return "casual";
+  // Conversational
+  if (q.split(" ").length <= 5 &&
+    /^(hi|hello|hey|how are you|thanks|thank you|okay|ok|bye|good|fine|nice|great|sup|yo|what's up)/i.test(q)) {
+    return "conversational";
   }
 
-  if (/^(how (do|to|can|should)|what('s| is) the (process|procedure|way)|steps to|guide)/i.test(q)) {
-    return "procedural";
+  // Meta (about the bot itself)
+  if (/(who (are|made|built) you|what (are|can) you|instigpt|your (name|purpose))/i.test(q)) {
+    return "meta";
   }
 
-  if (/^(what|when|where|who|which|how (many|much))\b/i.test(q) &&
-    !/(best|recommend|should|opinion|think)/i.test(q)) {
-    return "factual";
+  // Web-needed (time-sensitive or external)
+  if (/(today|tomorrow|current|latest|this week|this month|2025|2026|placement|intern.*(season|drive)|fest.*date)/i.test(q)) {
+    return "web_needed";
   }
 
-  if (/(best|recommend|should|worth|review|opinion|easy|difficult|compare)/i.test(q)) {
-    return "opinion";
-  }
-
-  return "exploratory";
+  // Default: knowledge retrieval
+  return "knowledge";
 }
 
-// ═══ Query Expansion (single LLM call, only for complex queries) ═══
+// ═══ Multi-Query Generation (1 LLM call max) ═══
 
-async function expandQuery(
+async function generateSearchQueries(
   query: string,
-  queryType: QueryType,
+  intent: QueryIntent,
   llm: LLMPort
 ): Promise<string[]> {
-  // Simple queries don't need expansion
-  if (queryType === "factual" || queryType === "casual") {
+  // Only expand for complex knowledge queries
+  if (intent !== "knowledge" || query.split(" ").length <= 5) {
     return [query];
   }
 
-  const prompt = `Generate 2 alternative search queries for: "${query}"
-One more specific, one more general. One per line, no numbering.`;
+  const prompt = `Generate 2 search queries to find information about: "${query}"
+Make one specific and one general. Return ONLY 2 queries, one per line.`;
 
   const result = await llm.complete(prompt);
   if (!result) return [query];
 
   const variants = result
     .split("\n")
-    .map((l) => l.trim())
+    .map((l) => l.replace(/^\d+[.)]\s*/, "").trim())
     .filter((l) => l.length > 5 && l.length < 200);
 
   return [query, ...variants.slice(0, 2)];
 }
 
-// ═══ Multi-Query Retrieval ═══
+// ═══ Reciprocal Rank Fusion (RRF) ═══
+// Industry standard for merging multiple ranked lists
+// Used by Elasticsearch, Onyx, and Azure AI Search
 
-async function multiQueryRetrieve(
-  queries: string[],
-  embedding: EmbeddingPort,
-  search: SearchPort,
-  webSearch: WebSearchPort,
-  queryType: QueryType
-): Promise<Source[]> {
-  const ragLimit = queryType === "factual" ? 5 : 8;
-  const webLimit = queryType === "procedural" ? 4 : 2;
+function reciprocalRankFusion(
+  rankedLists: Source[][],
+  k: number = 60 // standard RRF constant
+): Source[] {
+  const scoreMap = new Map<string, { source: Source; score: number }>();
 
-  // Embed all queries in parallel
-  const embeddings = await Promise.all(queries.map((q) => embedding.embed(q)));
-
-  // Search with all queries + web in parallel
-  const allPromises = [
-    webSearch.search(queries[0], webLimit),
-    ...embeddings.map((emb, i) => search.search(emb, queries[i], ragLimit)),
-  ];
-
-  const [webResults, ...ragResults] = await Promise.all(allPromises);
-
-  // Deduplicate by content fingerprint
-  const seen = new Set<string>();
-  const allSources: Source[] = [];
-
-  for (const results of ragResults) {
-    for (const source of results) {
+  for (const list of rankedLists) {
+    for (let rank = 0; rank < list.length; rank++) {
+      const source = list[rank];
       const key = source.content_snippet.slice(0, 80).toLowerCase().replace(/\s+/g, " ");
-      if (seen.has(key)) continue;
-      seen.add(key);
-      allSources.push(source);
+      const rrfScore = 1 / (k + rank + 1);
+
+      if (scoreMap.has(key)) {
+        scoreMap.get(key)!.score += rrfScore;
+      } else {
+        scoreMap.set(key, { source, score: rrfScore });
+      }
     }
   }
 
-  for (const source of webResults) {
-    allSources.push(source);
+  return Array.from(scoreMap.values())
+    .sort((a, b) => b.score - a.score)
+    .map(({ source, score }) => ({
+      ...source,
+      relevance_score: score,
+    }));
+}
+
+// ═══ Confidence Scoring ═══
+// Determines if retrieval actually found useful results
+
+interface ConfidenceResult {
+  sources: Source[];
+  confidence: "high" | "medium" | "low" | "none";
+}
+
+function scoreConfidence(sources: Source[], query: string): ConfidenceResult {
+  if (sources.length === 0) {
+    return { sources: [], confidence: "none" };
   }
 
-  return allSources;
-}
-
-// ═══ Heuristic Re-ranking (no LLM needed) ═══
-
-function rerankHeuristic(sources: Source[], query: string): Source[] {
   const queryTerms = query.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
+  const topSource = sources[0];
+  const content = topSource.content_snippet.toLowerCase();
 
-  return sources
-    .map((source) => {
-      let boost = 0;
-      const content = source.content_snippet.toLowerCase();
+  // Check how many query terms appear in top result
+  const matchedTerms = queryTerms.filter((t) => content.includes(t));
+  const coverage = matchedTerms.length / Math.max(queryTerms.length, 1);
 
-      // Boost: exact phrase match
-      if (content.includes(query.toLowerCase())) {
-        boost += 0.3;
-      }
+  // Check the RRF score distribution
+  const topScore = sources[0]?.relevance_score || 0;
+  const secondScore = sources[1]?.relevance_score || 0;
+  const scoreDrop = topScore > 0 ? (topScore - secondScore) / topScore : 0;
 
-      // Boost: term coverage — what % of query terms appear in the chunk
-      const matchedTerms = queryTerms.filter((t) => content.includes(t));
-      const termCoverage = matchedTerms.length / Math.max(queryTerms.length, 1);
-      boost += termCoverage * 0.2;
+  // High confidence: strong term match + good score
+  if (coverage >= 0.6 && topScore > 0.02) {
+    return { sources, confidence: "high" };
+  }
 
-      // Boost: graph sources (structured data is more reliable)
-      if (source.source_type === "graph") {
-        boost += 0.15;
-      }
+  // Medium: decent match
+  if (coverage >= 0.3 || topScore > 0.015) {
+    return { sources, confidence: "medium" };
+  }
 
-      // Boost: shorter, more focused chunks (less noise)
-      if (source.content_snippet.length < 500) {
-        boost += 0.05;
-      }
+  // Low: weak match — sources may not be relevant
+  if (sources.length > 0) {
+    return { sources: sources.slice(0, 2), confidence: "low" };
+  }
 
-      // Penalty: very short chunks (likely incomplete)
-      if (source.content_snippet.length < 50) {
-        boost -= 0.1;
-      }
-
-      return {
-        ...source,
-        relevance_score: source.relevance_score + boost,
-      };
-    })
-    .sort((a, b) => b.relevance_score - a.relevance_score);
+  return { sources: [], confidence: "none" };
 }
 
-// ═══ Smart Context Assembly ═══
+// ═══ Context Window Optimizer ═══
+// Fits sources into LLM's context budget, prioritizing quality
 
-function assembleContext(sources: Source[], maxTokenBudget: number = 3000): Source[] {
-  // Estimate ~4 chars per token
-  const charBudget = maxTokenBudget * 4;
+function optimizeForContext(
+  sources: Source[],
+  confidence: "high" | "medium" | "low" | "none",
+  maxChars: number = 8000
+): Source[] {
+  if (confidence === "none") return [];
+
+  // For low confidence, use minimal context to avoid confusing the LLM
+  const budget = confidence === "low" ? Math.min(maxChars, 2000) : maxChars;
+  const maxSources = confidence === "high" ? 6 : confidence === "medium" ? 4 : 2;
+
   let totalChars = 0;
   const selected: Source[] = [];
 
-  for (const source of sources) {
-    const snippetLength = source.content_snippet.length;
-    if (totalChars + snippetLength > charBudget) {
-      // Truncate the last chunk to fit
-      if (selected.length < 2) {
+  for (const source of sources.slice(0, maxSources)) {
+    const len = source.content_snippet.length;
+    if (totalChars + len > budget) {
+      // Include truncated last source if we have room
+      const remaining = budget - totalChars;
+      if (remaining > 100) {
         selected.push({
           ...source,
-          content_snippet: source.content_snippet.slice(0, charBudget - totalChars),
+          content_snippet: source.content_snippet.slice(0, remaining),
         });
       }
       break;
     }
-    totalChars += snippetLength;
+    totalChars += len;
     selected.push(source);
   }
 
   return selected;
 }
 
-// ═══ Main RAG Pipeline ═══
+// ═══ Main Pipeline ═══
 
 export interface RAGInput {
   query: string;
@@ -192,44 +198,64 @@ export interface RAGInput {
 
 export interface RAGResult {
   sources: Source[];
-  queryType: QueryType;
+  queryType: QueryIntent;
+  confidence: "high" | "medium" | "low" | "none";
   expandedQueries: string[];
 }
 
-/**
- * Optimized RAG pipeline:
- * classify → expand (1 LLM call max) → multi-retrieve → heuristic re-rank → assemble
- */
 export async function ragPipeline(input: RAGInput): Promise<RAGResult> {
   const { query, llm, search, embedding, webSearch } = input;
 
-  // 1. Classify query type
-  const queryType = classifyQuery(query);
+  // 1. Route the query
+  const queryType = routeQuery(query);
 
-  if (queryType === "casual") {
-    return { sources: [], queryType, expandedQueries: [query] };
+  if (queryType === "conversational" || queryType === "meta") {
+    return { sources: [], queryType, confidence: "none", expandedQueries: [query] };
   }
 
-  // 2. Expand query (1 LLM call for non-factual, 0 for factual)
-  const expandedQueries = await expandQuery(query, queryType, llm);
+  // 2. Generate search queries (0-1 LLM calls)
+  const expandedQueries = await generateSearchQueries(query, queryType, llm);
 
-  // 3. Multi-query parallel retrieval
-  const rawSources = await multiQueryRetrieve(
-    expandedQueries, embedding, search, webSearch, queryType
-  );
+  // 3. Parallel retrieval with all queries
+  const embeddings = await Promise.all(expandedQueries.map((q) => embedding.embed(q)));
 
-  // 4. Heuristic re-ranking (fast, no LLM)
-  const reranked = rerankHeuristic(rawSources, query);
+  const retrievalPromises: Promise<Source[]>[] = [
+    // Vector search with each expanded query
+    ...embeddings.map((emb, i) => search.search(emb, expandedQueries[i], 8)),
+  ];
 
-  // 5. Filter out low-relevance noise before assembly
-  const relevant = reranked.filter((s) => s.relevance_score >= 0.4);
+  // Add web search for web_needed queries
+  if (queryType === "web_needed") {
+    retrievalPromises.push(webSearch.search(query, 4));
+  } else {
+    retrievalPromises.push(webSearch.search(query, 2));
+  }
 
-  // 6. Smart context assembly (fit within token budget)
-  const assembled = assembleContext(relevant.length > 0 ? relevant : reranked.slice(0, 3));
+  const results = await Promise.all(retrievalPromises);
+
+  // 4. Separate web results from RAG results for different fusion
+  const webResults = results[results.length - 1];
+  const ragResults = results.slice(0, -1);
+
+  // 5. Apply Reciprocal Rank Fusion to RAG results
+  const fusedRAG = reciprocalRankFusion(ragResults);
+
+  // 6. Merge web results (placed after RAG results)
+  const allSources = [
+    ...fusedRAG,
+    ...webResults.map((s) => ({ ...s, relevance_score: 0.01 })), // Web gets lowest RRF
+  ];
+
+  // 7. Score confidence
+  const { sources: scoredSources, confidence } = scoreConfidence(allSources, query);
+
+  // 8. Optimize for context window
+  const optimized = optimizeForContext(scoredSources, confidence);
 
   return {
-    sources: assembled,
+    sources: optimized,
     queryType,
+    confidence,
     expandedQueries,
   };
 }

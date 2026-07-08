@@ -110,7 +110,7 @@ export async function* chat(
     searchQuery = condensed || question;
   }
 
-  // 4. Run SOTA RAG pipeline (classify → expand → retrieve → re-rank → compress)
+  // 4. Run production RAG pipeline (route → expand → retrieve → RRF → confidence)
   const ragResult = await ragPipeline({
     query: searchQuery,
     llm: deps.llm,
@@ -121,19 +121,18 @@ export async function* chat(
 
   const allSources = ragResult.sources;
 
-  yield {
-    type: "sources",
-    sources: allSources
-      .filter((s) => s.relevance_score >= 0.5)
-      .slice(0, 5)
-      .map((s) => ({
+  // Only show sources to user when retrieval is confident
+  const displaySources = ragResult.confidence === "high" || ragResult.confidence === "medium"
+    ? allSources.slice(0, 5).map((s) => ({
         ...s,
         content_snippet: s.content_snippet.slice(0, 200),
-      })),
-  };
+      }))
+    : [];
 
-  // 6. Build prompt
-  const systemPrompt = buildSystemPrompt(allSources, user);
+  yield { type: "sources", sources: displaySources };
+
+  // 6. Build prompt (adapt based on retrieval confidence)
+  const systemPrompt = buildSystemPrompt(allSources, user, ragResult.confidence);
   const messages = [
     ...history.slice(-10).map((m) => ({
       role: m.role as "user" | "assistant",
@@ -178,7 +177,7 @@ export async function* chat(
 
 // ═══ Prompt Construction (domain logic, not infra) ═══
 
-function buildSystemPrompt(sources: Source[], user?: UserContext): string {
+function buildSystemPrompt(sources: Source[], user?: UserContext, confidence?: string): string {
   let prompt = `You are InstiGPT, a helpful assistant for IIT Bombay students.
 
 Rules:
@@ -197,6 +196,11 @@ Format:
 - Never use markdown formatting (no bold, headers, or code blocks).
 - Never insert line breaks within words or abbreviations (B.Tech, M.Tech, Ph.D., etc.).
 - Write abbreviations as single unbroken tokens: BTech, MTech, PhD, CPI, SPI, IITB.`;
+
+  // Adapt based on retrieval confidence
+  if (confidence === "none" || confidence === "low") {
+    prompt += `\n\nNote: The retrieved context may not be directly relevant. Rely more on your general knowledge about IITB.`;
+  }
 
   if (user?.department || user?.program) {
     prompt += `\n\nStudent: ${user.name || "Unknown"}, ${user.program || ""} ${user.department || ""}, Year ${user.year || "?"}`;
