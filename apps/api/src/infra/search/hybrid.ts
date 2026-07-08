@@ -9,15 +9,80 @@ import type { Source } from "@instigpt/shared";
 export function createHybridSearch(supabase: SupabaseClient): SearchPort {
   return {
     async search(embedding, query, limit = 10): Promise<Source[]> {
+      // Extract metadata filter hints from query
+      const metadataFilter = extractMetadataFilter(query);
+
       const [vectorResults, keywordResults, graphResults] = await Promise.all([
-        vectorSearch(supabase, embedding, limit),
+        vectorSearch(supabase, embedding, limit, metadataFilter),
         keywordSearch(supabase, query, limit),
         graphSearch(supabase, query),
       ]);
 
-      return mergeAndRank(vectorResults, keywordResults, graphResults, limit);
+      const merged = mergeAndRank(vectorResults, keywordResults, graphResults, limit * 2);
+
+      // Cross-encoder re-ranking pass
+      const reranked = crossEncoderRerank(merged, query, limit);
+
+      return reranked;
     },
   };
+}
+
+// ─── Metadata Filter Extraction ───
+
+interface MetadataFilter {
+  sourceHints: string[];  // e.g., ["mech", "mechanical"]
+  category?: string;      // e.g., "department", "club"
+}
+
+function extractMetadataFilter(query: string): MetadataFilter {
+  const q = query.toLowerCase();
+  const sourceHints: string[] = [];
+  let category: string | undefined;
+
+  // Department detection
+  const deptMap: Record<string, string[]> = {
+    cse: ["cse", "computer science", "cs dept"],
+    mech: ["mech", "mechanical"],
+    elec: ["elec", "electrical", "ee dept"],
+    civil: ["civil"],
+    aero: ["aero", "aerospace"],
+    che: ["chemical", "che dept"],
+    bio: ["bio", "bioscience", "bsbe"],
+    maths: ["math", "mathematics"],
+    physics: ["physics"],
+    hss: ["hss", "humanities"],
+    eco: ["economics", "eco"],
+    earth: ["earth science"],
+    env: ["environment", "env"],
+  };
+
+  for (const [key, terms] of Object.entries(deptMap)) {
+    if (terms.some((t) => q.includes(t))) {
+      sourceHints.push(key);
+      category = "department";
+    }
+  }
+
+  // Document type detection
+  if (/(rulebook|rule|regulation|policy|academic rule)/i.test(q)) {
+    sourceHints.push("ugrulebook", "rulebook");
+  }
+  if (/(course|elective|prerequisite|credit)/i.test(q)) {
+    sourceHints.push("resobin", "course");
+  }
+  if (/(hostel|room|mess|accommodation)/i.test(q)) {
+    sourceHints.push("hostel");
+  }
+  if (/(club|tech|council|fest|mood indigo|techfest)/i.test(q)) {
+    sourceHints.push("itc");
+    category = "club";
+  }
+  if (/(damp|mentor|academic guidance)/i.test(q)) {
+    sourceHints.push("damp");
+  }
+
+  return { sourceHints, category };
 }
 
 // ─── Internal search strategies ───
@@ -46,8 +111,32 @@ interface GraphEntity {
 async function vectorSearch(
   sb: SupabaseClient,
   embedding: number[],
-  limit: number
+  limit: number,
+  filter?: MetadataFilter
 ): Promise<RawResult[]> {
+  // If we have source hints, do a filtered search first
+  if (filter && filter.sourceHints.length > 0) {
+    const filterPattern = filter.sourceHints.map((h) => `%${h}%`);
+    const { data: filtered } = await sb.rpc("search_chunks", {
+      query_embedding: embedding,
+      match_count: limit,
+      similarity_threshold: 0.25,
+    });
+
+    // Client-side filter (since Supabase RPC doesn't support ILIKE in vector search)
+    const filteredResults = (filtered || []).filter((r: any) => {
+      const src = (r.source || "").toLowerCase();
+      const meta = JSON.stringify(r.metadata || {}).toLowerCase();
+      return filter.sourceHints.some((h) => src.includes(h) || meta.includes(h));
+    });
+
+    // If we found enough filtered results, use them; otherwise fall back to unfiltered
+    if (filteredResults.length >= 3) {
+      return filteredResults.slice(0, limit);
+    }
+  }
+
+  // Unfiltered search
   const { data } = await sb.rpc("search_chunks", {
     query_embedding: embedding,
     match_count: limit,
@@ -127,6 +216,68 @@ async function searchByCourseCode(
       })),
     },
   ];
+}
+
+// ─── Cross-Encoder Re-ranking (no LLM, pure heuristic) ───
+
+function crossEncoderRerank(sources: Source[], query: string, limit: number): Source[] {
+  const queryTerms = query.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
+  const queryBigrams = getBigrams(query.toLowerCase());
+
+  return sources
+    .map((source) => {
+      const content = source.content_snippet.toLowerCase();
+      let boost = 0;
+
+      // 1. Term overlap score (what % of query terms appear)
+      const matchedTerms = queryTerms.filter((t) => content.includes(t));
+      const termOverlap = matchedTerms.length / Math.max(queryTerms.length, 1);
+      boost += termOverlap * 0.25;
+
+      // 2. Bigram overlap (consecutive word pairs — catches phrases)
+      const contentBigrams = getBigrams(content);
+      const bigramOverlap = queryBigrams.filter((b) => contentBigrams.includes(b)).length;
+      boost += Math.min(bigramOverlap * 0.05, 0.2);
+
+      // 3. Position weighting — terms appearing early in chunk score higher
+      for (const term of queryTerms) {
+        const pos = content.indexOf(term);
+        if (pos >= 0 && pos < 200) {
+          boost += 0.03; // Early mention bonus
+        }
+      }
+
+      // 4. Exact phrase match bonus
+      if (content.includes(query.toLowerCase())) {
+        boost += 0.3;
+      }
+
+      // 5. Length penalty — very long chunks are likely less focused
+      if (content.length > 2000) {
+        boost -= 0.05;
+      }
+
+      // 6. Source hint bonus — if title matches query keywords
+      const title = (source.title || "").toLowerCase();
+      const titleMatch = queryTerms.filter((t) => title.includes(t)).length;
+      boost += titleMatch * 0.08;
+
+      return {
+        ...source,
+        relevance_score: source.relevance_score + boost,
+      };
+    })
+    .sort((a, b) => b.relevance_score - a.relevance_score)
+    .slice(0, limit);
+}
+
+function getBigrams(text: string): string[] {
+  const words = text.split(/\s+/).filter((w) => w.length > 2);
+  const bigrams: string[] = [];
+  for (let i = 0; i < words.length - 1; i++) {
+    bigrams.push(`${words[i]} ${words[i + 1]}`);
+  }
+  return bigrams;
 }
 
 // ─── Merge & rank ───

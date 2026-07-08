@@ -101,13 +101,19 @@ export async function* chat(
   // 2. Get chat history
   const history = await deps.messages.getHistory(conversationId, 20);
 
-  // 3. Condense question if there's history
+  // 3. Condense question if there's history + extract conversation topic
   let searchQuery = question;
   if (history.length > 0) {
     const condensed = await deps.llm.complete(
       buildCondensePrompt(question, history)
     );
     searchQuery = condensed || question;
+
+    // Enrich with conversation topic (last few messages give topic context)
+    const topicContext = extractConversationTopic(history);
+    if (topicContext && !searchQuery.toLowerCase().includes(topicContext.toLowerCase())) {
+      searchQuery = `${topicContext}: ${searchQuery}`;
+    }
   }
 
   // 4. Run production RAG pipeline (route → expand → retrieve → RRF → confidence)
@@ -248,6 +254,44 @@ Format:
   }
 
   return prompt;
+}
+
+/**
+ * Extract the ongoing topic from conversation history.
+ * Looks at the last few user messages to identify a consistent topic.
+ */
+function extractConversationTopic(history: Message[]): string | null {
+  const userMessages = history
+    .filter((m) => m.role === "user")
+    .slice(-4)
+    .map((m) => m.content.toLowerCase());
+
+  if (userMessages.length === 0) return null;
+
+  // Common topic patterns
+  const topicPatterns: [RegExp, string][] = [
+    [/(cs|cse|computer science)/i, "CSE"],
+    [/(mech|mechanical)/i, "Mechanical Engineering"],
+    [/(elec|electrical|ee)/i, "Electrical Engineering"],
+    [/(civil)/i, "Civil Engineering"],
+    [/(aero|aerospace)/i, "Aerospace Engineering"],
+    [/(chem|chemical)/i, "Chemical Engineering"],
+    [/(branch change)/i, "branch change"],
+    [/(minor|minors)/i, "minor degree"],
+    [/(honors|honour)/i, "honors"],
+    [/(placement|intern)/i, "placements"],
+    [/(hostel)/i, "hostel"],
+    [/(course|elective)/i, "courses"],
+    [/(cpi|spi|grade|grading)/i, "grading"],
+  ];
+
+  // Check if recent messages share a topic
+  for (const [pattern, topic] of topicPatterns) {
+    const matches = userMessages.filter((m) => pattern.test(m));
+    if (matches.length >= 2) return topic;
+  }
+
+  return null;
 }
 
 function deduplicateSources(sources: Source[]): Source[] {
