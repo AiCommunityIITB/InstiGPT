@@ -119,34 +119,35 @@ function scoreConfidence(sources: Source[], query: string): ConfidenceResult {
   }
 
   const queryTerms = query.toLowerCase().split(/\s+/).filter((t) => t.length > 2);
-  const topSource = sources[0];
-  const content = topSource.content_snippet.toLowerCase();
 
-  // Check how many query terms appear in top result
-  const matchedTerms = queryTerms.filter((t) => content.includes(t));
-  const coverage = matchedTerms.length / Math.max(queryTerms.length, 1);
+  // Check term coverage across TOP 3 sources (not just first)
+  let totalCoverage = 0;
+  const topN = Math.min(sources.length, 3);
+  for (let i = 0; i < topN; i++) {
+    const content = sources[i].content_snippet.toLowerCase();
+    const title = (sources[i].title || "").toLowerCase();
+    const combined = content + " " + title;
+    const matchedTerms = queryTerms.filter((t) => combined.includes(t));
+    totalCoverage += matchedTerms.length / Math.max(queryTerms.length, 1);
+  }
+  const avgCoverage = totalCoverage / topN;
 
-  // Check the RRF score distribution
-  const topScore = sources[0]?.relevance_score || 0;
-  const secondScore = sources[1]?.relevance_score || 0;
-  const scoreDrop = topScore > 0 ? (topScore - secondScore) / topScore : 0;
+  // Check if sources are just URLs or metadata (low-quality chunks)
+  const topContent = sources[0].content_snippet;
+  const isJustUrl = /^https?:\/\//.test(topContent.trim()) && topContent.length < 200;
 
-  // High confidence: strong term match + good score
-  if (coverage >= 0.6 && topScore > 0.02) {
+  // High confidence: strong term match across multiple sources, not just URLs
+  if (avgCoverage >= 0.5 && !isJustUrl) {
     return { sources, confidence: "high" };
   }
 
-  // Medium: decent match
-  if (coverage >= 0.3 || topScore > 0.015) {
+  // Medium: decent match, real content
+  if (avgCoverage >= 0.3 && !isJustUrl && topContent.length > 100) {
     return { sources, confidence: "medium" };
   }
 
-  // Low: weak match — sources may not be relevant
-  if (sources.length > 0) {
-    return { sources: sources.slice(0, 2), confidence: "low" };
-  }
-
-  return { sources: [], confidence: "none" };
+  // Low: weak match — sources probably not relevant
+  return { sources: sources.slice(0, 2), confidence: "low" };
 }
 
 // ═══ Context Window Optimizer ═══
