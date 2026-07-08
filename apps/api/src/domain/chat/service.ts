@@ -134,7 +134,7 @@ export async function* chat(
   yield { type: "sources", sources: displaySources };
 
   // 6. Build prompt (adapt based on retrieval confidence)
-  const systemPrompt = buildSystemPrompt(allSources, user, ragResult.confidence);
+  const systemPrompt = buildSystemPrompt(allSources, user, ragResult.confidence, ragResult);
   const messages = [
     ...history.slice(-10).map((m) => ({
       role: m.role as "user" | "assistant",
@@ -179,7 +179,7 @@ export async function* chat(
 
 // ═══ Prompt Construction (domain logic, not infra) ═══
 
-function buildSystemPrompt(sources: Source[], user?: UserContext, confidence?: string): string {
+function buildSystemPrompt(sources: Source[], user?: UserContext, confidence?: string, ragResult?: { queryType: string }): string {
   let prompt = `You are InstiGPT, a helpful assistant for IIT Bombay students.
 
 Rules:
@@ -202,6 +202,11 @@ Format:
   // Adapt based on retrieval confidence
   if (confidence === "none" || confidence === "low") {
     prompt += `\n\nNote: The retrieved context may not be directly relevant. Rely more on your general knowledge about IITB.`;
+  }
+
+  // Fun/roast mode
+  if (ragResult?.queryType === "fun") {
+    prompt += `\n\nIMPORTANT: The user wants something fun! If they ask for a roast, be savage but affectionate — like a senior ragging a fresher with love. Use IITB stereotypes, inside jokes (night outs, grading, maggi at 3am, hostel life, insti lingo). Keep it short (3-5 sentences max), punchy, and hilarious. No disclaimers or apologies.`;
   }
 
   if (user?.department || user?.program) {

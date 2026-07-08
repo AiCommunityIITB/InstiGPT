@@ -22,6 +22,7 @@ export type QueryIntent =
   | "knowledge"    // needs RAG (courses, rules, profs, clubs)
   | "web_needed"   // needs web search (current events, deadlines)
   | "conversational" // casual, greeting, thanks
+  | "fun"          // roasts, jokes, fun facts about IITB
   | "meta";        // about InstiGPT itself
 
 function routeQuery(query: string): QueryIntent {
@@ -31,6 +32,11 @@ function routeQuery(query: string): QueryIntent {
   if (q.split(" ").length <= 5 &&
     /^(hi|hello|hey|how are you|thanks|thank you|okay|ok|bye|good|fine|nice|great|sup|yo|what's up)/i.test(q)) {
     return "conversational";
+  }
+
+  // Fun mode (roasts, jokes, fun facts)
+  if (/(roast|joke|funny|meme|fun fact|stereotype|savage|burn)/i.test(q)) {
+    return "fun";
   }
 
   // Meta (about the bot itself)
@@ -211,6 +217,11 @@ export async function ragPipeline(input: RAGInput): Promise<RAGResult> {
   const queryType = routeQuery(query);
 
   if (queryType === "conversational" || queryType === "meta") {
+    return { sources: [], queryType, confidence: "none", expandedQueries: [query] };
+  }
+
+  // Fun mode — no retrieval needed, LLM will freestyle
+  if (queryType === "fun") {
     return { sources: [], queryType, confidence: "none", expandedQueries: [query] };
   }
 
