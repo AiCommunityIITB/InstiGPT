@@ -206,7 +206,9 @@ Format:
 
   // Fun/roast mode
   if (ragResult?.queryType === "fun") {
-    prompt += `\n\nIMPORTANT: The user wants something fun! If they ask for a roast, be savage but affectionate — like a senior ragging a fresher with love. Use IITB stereotypes, inside jokes (night outs, grading, maggi at 3am, hostel life, insti lingo). Keep it short (3-5 sentences max), punchy, and hilarious. No disclaimers or apologies.`;
+    prompt += `\n\nIMPORTANT: The user wants something fun or a roast.
+- For roasts: Be savage but affectionate. Use specific IITB stereotypes (night-outs before exams, relative grading trauma, hostel food complaints, department rivalries, placement anxiety). Keep it 2-3 sentences, punchy. No disclaimers.
+- For fun facts: Give genuinely obscure, surprising facts that only someone who studied at IITB would know. NOT generic things like "Mood Indigo is big" or "campus is near a forest" — those are boring. Think: specific traditions, hidden spots on campus, weird rules, legendary incidents, quirky professor stories, or absurd statistics.`;
   }
 
   if (user?.department || user?.program) {

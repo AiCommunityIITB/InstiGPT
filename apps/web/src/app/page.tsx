@@ -148,14 +148,14 @@ export default function Home() {
 
 function EmptyState({ onExample }: { onExample: (q: string) => void }) {
   const examples = [
-    { emoji: "🔥", text: "Roast my department", query: "Roast CSE department in a funny way" },
-    { emoji: "📚", text: "Easiest courses for free 10", query: "What are the easiest courses to get a good grade?" },
-    { emoji: "🏠", text: "Which hostel is the best?", query: "Compare the hostels at IITB - which is best?" },
-    { emoji: "🔀", text: "Branch change rules", query: "Branch change requirements" },
-    { emoji: "🎯", text: "Best profs for chill courses", query: "Which professors are known for being lenient with grading?" },
-    { emoji: "🧠", text: "Explain CPI like I'm 5", query: "Explain the CPI and SPI system in very simple terms" },
-    { emoji: "💼", text: "How to get a Day 1 intern", query: "What should I do to get a Day 1 internship offer?" },
-    { emoji: "🎭", text: "Tell me an IITB fun fact", query: "Tell me a fun or surprising fact about IIT Bombay" },
+    "Roast CSE department",
+    "Easiest courses to score well in",
+    "Compare the hostels",
+    "Branch change requirements",
+    "Which profs are lenient graders?",
+    "Explain CPI like I'm 5",
+    "How to get a Day 1 intern",
+    "What's something weird about IITB?",
   ];
 
   return (
@@ -165,22 +165,21 @@ function EmptyState({ onExample }: { onExample: (q: string) => void }) {
           Insti<span className="text-emerald-400">GPT</span>
         </h1>
         <p className="mt-2 text-xs text-foreground-subtle sm:text-sm">
-          Your AI buddy for all things IIT Bombay 🏛️
+          Your AI buddy for all things IIT Bombay
         </p>
         <p className="mt-1 text-2xs text-foreground-subtle opacity-60">
-          courses • profs • hostels • rules • placement • or just vibes
+          courses / profs / hostels / rules / placement / or just vibes
         </p>
       </div>
 
       <div className="grid w-full max-w-sm gap-2 sm:max-w-lg sm:grid-cols-2 lg:max-w-xl lg:grid-cols-2 sm:gap-2.5">
         {examples.map((ex) => (
           <button
-            key={ex.text}
-            onClick={() => onExample(ex.query)}
-            className="flex items-center gap-2.5 rounded-lg border border-border px-3.5 py-2.5 text-left text-xs text-foreground-muted transition-all hover:border-emerald-500/40 hover:bg-emerald-500/5 hover:text-foreground sm:px-4 sm:py-3"
+            key={ex}
+            onClick={() => onExample(ex)}
+            className="rounded-lg border border-border px-3.5 py-2.5 text-left text-xs text-foreground-muted transition-all hover:border-emerald-500/40 hover:bg-emerald-500/5 hover:text-foreground sm:px-4 sm:py-3"
           >
-            <span className="text-base">{ex.emoji}</span>
-            <span>{ex.text}</span>
+            {ex}
           </button>
         ))}
       </div>
