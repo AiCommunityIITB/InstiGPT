@@ -1,38 +1,113 @@
-# InstiGPT
+# InstiGPT v2
 
-The answer to all of insti's questions.
+Intelligent campus assistant for IIT Bombay — powered by RAG (hybrid vector + knowledge graph search), Groq (Llama 3.1), and real-time web search.
 
-## NOTION PAGE FOR HELLOFOSS CONTRIBUTORS
-[CLICK HERE](https://magical-ornament-602.notion.site/27c83e2bca3f80df826edae7da9e0de7?v=27c83e2bca3f803f9796000c2f66f220&source=copy_link) - WE ARE STILL UPDATING!
+## Architecture
 
-## Developing
+```
+Frontend (Next.js 15)  →  API (Hono.js / Cloudflare Workers)  →  Supabase (pgvector + graph)
+     Vercel                        Edge                              Postgres
+                                     ↓
+                              Groq (Llama 3.1 70B)
+                              Cloudflare AI (embeddings)
+                              DuckDuckGo (web search)
+```
 
-The application has 4 parts: backend, frontend a vector database and a relational database.
+## Stack
 
-### Backend
+| Layer | Technology | Hosting |
+|---|---|---|
+| Frontend | Next.js 15, Tailwind, PWA | Vercel (free) |
+| API | Hono.js, TypeScript | Cloudflare Workers (free) |
+| LLM | Groq (Llama 3.1 70B) | Free tier |
+| Embeddings | BGE Base v1.5 via CF Workers AI | Free |
+| Database | Supabase (Postgres + pgvector) | Free 500MB |
+| Web Search | DuckDuckGo | Free |
+| Auth | IIT Bombay Gymkhana SSO | — |
 
-1. Install the dependencies using `pipenv install`.
-1. Run the app using `pipenv run python main.py`.
+## Project Structure
 
-### Frontend
+```
+instigpt/
+├── apps/
+│   ├── api/            # Hono.js API (Cloudflare Workers)
+│   └── web/            # Next.js frontend (Vercel)
+├── packages/
+│   └── shared/         # Shared TypeScript types
+├── scripts/
+│   └── embed.py        # One-time embedding pipeline (Python)
+├── supabase/
+│   └── migrations/     # Database schema
+├── data/               # Source documents (PDFs, JSONs, CSVs)
+└── pnpm-workspace.yaml
+```
 
-1. Install the dependencies using `pnpm i`.
-1. Run the app using `pnpm dev`.
+## Quick Start
 
-### Vector DB
+### Prerequisites
 
-This app uses `chromadb` as its vector store.
-To run an instance of `chromadb` in docker, run: `docker run -p 8000:8000 --env IS_PERSIST=true --env ALLOW_RESET=true --name chromadb chromadb/chroma`.
+- Node.js 22+
+- pnpm (`npm i -g pnpm`)
+- Python 3.10+ (for embedding pipeline only)
+- Accounts: [Supabase](https://supabase.com), [Groq](https://console.groq.com), [Cloudflare](https://dash.cloudflare.com)
 
-Also make sure you set the required environment variables in the `.env` file namely `VECTOR_DB_HOST` to `localhost` and `VECTOR_DB_PORT` to `8000`
+### 1. Install dependencies
 
-To generate embeddings, run `pipenv run python load_data_in_db.py` in scripts folder. Do the commented changes accordingly to use resobin data or ugrulebook data in `load_data_in_db.py` and `config.py`.
+```bash
+pnpm install
+```
 
-### Relational DB
+### 2. Setup environment
 
-This app uses `postgres` as its relational database.
-To run an instance of `postgres` in docker, run: `docker run -p 5432:5432 --env POSTGRES_PASSWORD=<password> --name postgres postgres`.
+```bash
+cp .env.example .env
+# Fill in your keys
+```
 
-## Running in Production
+### 3. Setup database
 
-This app can easily be run in production through docker by running `docker compose up -d`
+Run the migration SQL in your Supabase SQL Editor:
+- Go to Supabase Dashboard → SQL Editor
+- Paste contents of `supabase/migrations/001_initial_schema.sql`
+- Execute
+
+### 4. Embed documents
+
+```bash
+cd scripts
+pip install -r requirements.txt
+python embed.py
+```
+
+### 5. Run locally
+
+```bash
+# API (runs on :8787)
+pnpm dev:api
+
+# Frontend (runs on :3000)
+pnpm dev:web
+```
+
+### 6. Deploy
+
+```bash
+# API → Cloudflare Workers
+pnpm deploy:api
+
+# Frontend → Vercel
+# Connect the apps/web directory to Vercel
+```
+
+## Features
+
+- **Streaming responses** — real-time token streaming via SSE
+- **Hybrid RAG** — vector search + keyword search + knowledge graph
+- **Personalized** — knows your department/year from roll number
+- **Web augmented** — falls back to DuckDuckGo for fresh info
+- **PWA** — installable on mobile like a native app
+- **Edge-first** — API runs globally on Cloudflare's edge network (0ms cold start)
+
+## Team
+
+Built by the InstiGPT Team, IIT Bombay.

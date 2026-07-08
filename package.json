@@ -1,0 +1,15 @@
+{
+  "name": "instigpt",
+  "private": true,
+  "scripts": {
+    "dev:api": "pnpm --filter @instigpt/api dev",
+    "dev:web": "pnpm --filter @instigpt/web dev",
+    "dev": "pnpm run --parallel dev:api dev:web",
+    "build": "pnpm --filter @instigpt/shared build && pnpm --filter @instigpt/api build && pnpm --filter @instigpt/web build",
+    "deploy:api": "pnpm --filter @instigpt/api deploy",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

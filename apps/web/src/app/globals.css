@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply min-h-screen text-sm leading-relaxed;
+    /* iOS PWA safe areas */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+  ::selection {
+    @apply bg-accent/20 text-foreground;
+  }
+
+  /* Prevent zoom on input focus (iOS) */
+  @media (max-width: 768px) {
+    input, textarea, select {
+      font-size: 16px !important;
+    }
+  }
+}
+
+@layer components {
+  .chat-user {
+    @apply rounded-[16px] rounded-br-[4px] bg-background-overlay border border-border px-3.5 py-2.5 text-sm text-foreground;
+  }
+
+  .chat-assistant {
+    @apply text-foreground leading-relaxed;
+  }
+}

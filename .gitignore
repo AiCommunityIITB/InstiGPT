@@ -1,2 +1,15 @@
+node_modules/
+dist/
+.wrangler/
+.vercel/
+.next/
+.env
+.env.local
+.env.*.local
+.dev.vars
+*.log
 .DS_Store
-embeddings*
+__pycache__/
+*.pyc
+.venv/
+.idea/

@@ -1,0 +1,24 @@
+name = "instigpt-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-30"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+ENVIRONMENT = "production"
+
+[dev]
+local = true
+
+[dev.vars]
+ENVIRONMENT = "development"
+
+# Secrets (set via `wrangler secret put`):
+# GROQ_API_KEY
+# SUPABASE_URL
+# SUPABASE_ANON_KEY
+# SUPABASE_SERVICE_ROLE_KEY
+# SSO_CLIENT_ID
+# SSO_CLIENT_SECRET
+
+[ai]
+binding = "AI"

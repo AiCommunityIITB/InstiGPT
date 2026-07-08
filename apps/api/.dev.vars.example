@@ -1,0 +1,7 @@
+GROQ_API_KEY=your_groq_api_key
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+SSO_CLIENT_ID=your_sso_client_id
+SSO_CLIENT_SECRET=your_sso_client_secret
+SSO_REDIRECT_URL=http://localhost:5173/login
