@@ -194,7 +194,9 @@ Format:
 - Use blank lines only between distinct paragraphs or before lists.
 - For lists, use "- " prefix.
 - Keep responses 3-6 sentences for simple questions, longer for complex ones.
-- Never use markdown formatting (no bold, headers, or code blocks).`;
+- Never use markdown formatting (no bold, headers, or code blocks).
+- Never insert line breaks within words or abbreviations (B.Tech, M.Tech, Ph.D., etc.).
+- Write abbreviations as single unbroken tokens: BTech, MTech, PhD, CPI, SPI, IITB.`;
 
   if (user?.department || user?.program) {
     prompt += `\n\nStudent: ${user.name || "Unknown"}, ${user.program || ""} ${user.department || ""}, Year ${user.year || "?"}`;

@@ -23,19 +23,19 @@ export async function* parseSSEStream(
     for (const part of parts) {
       if (!part.trim()) continue;
       let event = "message";
-      let data = "";
+      const dataLines: string[] = [];
       for (const line of part.split("\n")) {
         if (line.startsWith("event: ")) {
           event = line.slice(7);
         } else if (line.startsWith("event:")) {
           event = line.slice(6);
         } else if (line.startsWith("data: ")) {
-          // SSE spec: "data:" followed by a single space, then the value
-          data = line.slice(6);
+          dataLines.push(line.slice(6));
         } else if (line.startsWith("data:")) {
-          data = line.slice(5);
+          dataLines.push(line.slice(5));
         }
       }
+      const data = dataLines.join("\n");
       if (data !== "") yield { event, data };
     }
   }
