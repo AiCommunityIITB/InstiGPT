@@ -160,7 +160,7 @@ function mergeAndRank(
     if (seen.has(r.id)) continue;
     seen.add(r.id);
     sources.push({
-      title: r.source,
+      title: formatSourceTitle(r.source, r.metadata),
       content_snippet: r.content,
       source_type: "document",
       metadata: r.metadata,
@@ -177,7 +177,7 @@ function mergeAndRank(
     }
     seen.add(r.id);
     sources.push({
-      title: r.source,
+      title: formatSourceTitle(r.source, r.metadata),
       content_snippet: r.content,
       source_type: "document",
       metadata: r.metadata,
@@ -186,4 +186,32 @@ function mergeAndRank(
   }
 
   return sources.sort((a, b) => b.relevance_score - a.relevance_score).slice(0, limit);
+}
+
+// ─── Source title formatting ───
+
+function formatSourceTitle(rawSource: string, metadata: Record<string, unknown>): string {
+  // Try to build a meaningful title from metadata
+  const section = metadata?.section as string | undefined;
+  const page = metadata?.page as number | undefined;
+  const category = metadata?.category as string | undefined;
+
+  // Clean up the raw source path (remove file extensions, path separators)
+  let title = rawSource
+    .replace(/\.[^/.]+$/, "")           // Remove file extension
+    .replace(/^.*[/\\]/, "")            // Remove path prefix
+    .replace(/[_-]+/g, " ")            // Replace separators with spaces
+    .replace(/\b\w/g, (c) => c.toUpperCase()); // Title case
+
+  if (section) {
+    title = `${title} — ${section}`;
+  } else if (category) {
+    title = `${title} (${category})`;
+  }
+
+  if (page) {
+    title += ` p.${page}`;
+  }
+
+  return title;
 }

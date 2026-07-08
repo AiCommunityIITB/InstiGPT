@@ -6,6 +6,7 @@
  */
 import type { UserContext } from "../../types";
 import type { Source, Message } from "@instigpt/shared";
+import { ragPipeline } from "./rag";
 
 // ═══ Ports (interfaces that infra must implement) ═══
 
@@ -109,22 +110,16 @@ export async function* chat(
     searchQuery = condensed || question;
   }
 
-  // 4. Embed the search query
-  // 4. Skip retrieval for casual/greeting messages
-  const isCasual = searchQuery.split(" ").length <= 4 &&
-    /^(hi|hello|hey|how are you|thanks|thank you|okay|ok|bye|good|fine|nice|great|sup|yo)/i.test(searchQuery.trim());
+  // 4. Run SOTA RAG pipeline (classify → expand → retrieve → re-rank → compress)
+  const ragResult = await ragPipeline({
+    query: searchQuery,
+    llm: deps.llm,
+    search: deps.search,
+    embedding: deps.embedding,
+    webSearch: deps.webSearch,
+  });
 
-  let allSources: Source[] = [];
-  let queryEmbedding: number[] = [];
-
-  if (!isCasual) {
-    queryEmbedding = await deps.embedding.embed(searchQuery);
-    const [ragSources, webSources] = await Promise.all([
-      deps.search.search(queryEmbedding, searchQuery, 8),
-      deps.webSearch.search(searchQuery, 3),
-    ]);
-    allSources = [...ragSources, ...webSources];
-  }
+  const allSources = ragResult.sources;
 
   yield {
     type: "sources",
@@ -218,16 +213,16 @@ Format:
   }
   if (docSources.length > 0) {
     parts.push(
-      "[Documents]\n" +
+      "[Documents — pre-filtered for relevance]\n" +
         docSources
-          .slice(0, 5)
+          .slice(0, 6)
           .map((s) => `[${s.title}] ${s.content_snippet}`)
           .join("\n---\n")
     );
   }
   if (webSources.length > 0) {
     parts.push(
-      "[Web]\n" + webSources.map((s) => s.content_snippet).join("\n")
+      "[Web Results]\n" + webSources.map((s) => `[${s.title}] ${s.content_snippet}`).join("\n")
     );
   }
 
