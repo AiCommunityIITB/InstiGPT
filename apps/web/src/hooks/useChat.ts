@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { api } from "@/lib/api";
 import { parseSSEStream } from "@/lib/sse";
 
@@ -25,6 +25,17 @@ export function useChat(options: UseChatOptions = {}) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
+  // Use ref so send() always reads the latest conversationId
+  const convIdRef = useRef(options.conversationId);
+  useEffect(() => {
+    convIdRef.current = options.conversationId;
+  }, [options.conversationId]);
+
+  const onCreatedRef = useRef(options.onConversationCreated);
+  useEffect(() => {
+    onCreatedRef.current = options.onConversationCreated;
+  }, [options.onConversationCreated]);
+
   const send = useCallback(async (question: string) => {
     if (!question.trim() || isLoading) return;
 
@@ -41,7 +52,7 @@ export function useChat(options: UseChatOptions = {}) {
 
     try {
       const res = await api.chat.stream(
-        question.trim(), options.conversationId || undefined
+        question.trim(), convIdRef.current || undefined
       );
       if (!res.ok) throw new Error("Failed");
 
@@ -61,7 +72,10 @@ export function useChat(options: UseChatOptions = {}) {
           }
           case "metadata": {
             const meta = JSON.parse(ev.data);
-            if (meta.conversation_id) options.onConversationCreated?.(meta.conversation_id);
+            if (meta.conversation_id) {
+              convIdRef.current = meta.conversation_id;
+              onCreatedRef.current?.(meta.conversation_id);
+            }
             break;
           }
           case "done":
@@ -87,7 +101,7 @@ export function useChat(options: UseChatOptions = {}) {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoading, options]);
+  }, [isLoading]);
 
   const loadMessages = useCallback(
     (msgs: Array<{ id: string; role: string; content: string; sources?: any }>) => {
@@ -97,7 +111,10 @@ export function useChat(options: UseChatOptions = {}) {
     }, []
   );
 
-  const clear = useCallback(() => setMessages([]), []);
+  const clear = useCallback(() => {
+    setMessages([]);
+    convIdRef.current = null;
+  }, []);
 
   return { messages, isLoading, send, loadMessages, clear };
 }

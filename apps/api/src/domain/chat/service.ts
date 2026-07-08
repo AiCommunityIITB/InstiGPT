@@ -112,13 +112,18 @@ export async function* chat(
   // 4. Embed the search query
   const queryEmbedding = await deps.embedding.embed(searchQuery);
 
-  // 5. Run retrieval (hybrid + web) in parallel
-  const [ragSources, webSources] = await Promise.all([
-    deps.search.search(queryEmbedding, searchQuery, 8),
-    deps.webSearch.search(searchQuery, 3),
-  ]);
+  // 5. Skip retrieval for casual/greeting messages
+  const isCasual = searchQuery.split(" ").length <= 4 &&
+    /^(hi|hello|hey|how are you|thanks|thank you|okay|ok|bye|good|fine|nice|great|sup|yo)/i.test(searchQuery.trim());
 
-  const allSources = [...ragSources, ...webSources];
+  let allSources: Source[] = [];
+  if (!isCasual) {
+    const [ragSources, webSources] = await Promise.all([
+      deps.search.search(queryEmbedding, searchQuery, 8),
+      deps.webSearch.search(searchQuery, 3),
+    ]);
+    allSources = [...ragSources, ...webSources];
+  }
 
   yield {
     type: "sources",
@@ -180,15 +185,15 @@ function buildSystemPrompt(sources: Source[], user?: UserContext): string {
 Rules:
 - Answer using ONLY the provided context. Never fabricate.
 - If unsure, say so and suggest where to check.
-- Be concise. Keep responses short (3-5 sentences for simple questions).
+- Be concise. 2-4 sentences for simple questions, more for complex ones.
 - Do not repeat the question back.
 - Do not cite sources in your response. Sources are shown separately.
 
 Format:
-- Write in plain text paragraphs.
-- For lists, put each item on its own line starting with "- ".
-- Put a blank line between paragraphs and before/after lists.
-- Never use bold, headings, or any other formatting.`;
+- Separate each sentence or thought with a blank line.
+- For lists, use "- " prefix with a blank line before the list.
+- Never use bold, headings, or special formatting.
+- Keep it conversational and natural.`;
 
   if (user?.department || user?.program) {
     prompt += `\n\nStudent: ${user.name || "Unknown"}, ${user.program || ""} ${user.department || ""}, Year ${user.year || "?"}`;
