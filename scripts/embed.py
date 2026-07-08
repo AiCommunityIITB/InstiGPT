@@ -65,9 +65,37 @@ def load_json_file(path: Path) -> list[dict]:
     with open(path) as f:
         data = json.load(f)
     chunks = []
+
+    # Handle scraped content format (from scrape.py)
+    if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict) and "content" in data[0] and "url" in data[0]:
+        for page in data:
+            content = page.get("content", "")
+            title = page.get("title", "")
+            source = page.get("source", path.stem)
+            category = page.get("category", "")
+            url = page.get("url", "")
+            if not content or len(content) < 50:
+                continue
+            # Prepend title for better context
+            full_text = f"{title}\n\n{content}" if title else content
+            for c in text_splitter.split_text(full_text):
+                if c.strip() and len(c.strip()) > 30:
+                    chunks.append({
+                        "content": c,
+                        "source": title or source,
+                        "metadata": {"type": "scraped", "file": path.name, "url": url, "category": category},
+                    })
+        return chunks
+
+    # Handle regular JSON
     if isinstance(data, list):
         for item in data:
+            # Skip URL-only items
+            if isinstance(item, str) and item.startswith("http"):
+                continue
             text = item if isinstance(item, str) else "\n".join(f"{k}: {v}" for k, v in item.items() if v) if isinstance(item, dict) else str(item)
+            if not text.strip() or len(text.strip()) < 30:
+                continue
             for c in text_splitter.split_text(text):
                 if c.strip():
                     chunks.append({"content": c, "source": path.stem, "metadata": {"type": "json", "file": path.name}})
