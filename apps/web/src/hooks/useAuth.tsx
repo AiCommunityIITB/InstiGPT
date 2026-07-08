@@ -1,70 +1,87 @@
 "use client";
 
 import { useState, useEffect, useCallback, createContext, useContext } from "react";
-import { api } from "@/lib/api";
 import { config } from "@/config";
-import type { User } from "@instigpt/shared";
 
-// ─── Mock user for development ───
-const DEV_USER: User = {
-  id: "dev-001",
-  username: "devuser",
-  name: "Dev User",
-  email: "dev@iitb.ac.in",
-  roll_number: "210070042",
-  department: "Computer Science & Engineering",
-  year: 2021,
-  program: "BTech",
-  created_at: new Date().toISOString(),
-};
+interface User {
+  id: string;
+  email: string;
+  name: string;
+}
 
 interface AuthState {
   user: User | null;
   isLoading: boolean;
+  login: (email: string, password: string) => Promise<string | null>;
+  signup: (email: string, password: string, name: string) => Promise<string | null>;
   logout: () => Promise<void>;
-  refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState>({
   user: null,
   isLoading: true,
+  login: async () => null,
+  signup: async () => null,
   logout: async () => {},
-  refresh: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
-    // In dev mode, auto-login with mock user
-    if (config.isDev) {
-      setUser(DEV_USER);
-      setIsLoading(false);
-      return;
+  // Check existing session on mount
+  useEffect(() => {
+    const stored = localStorage.getItem("instigpt_user");
+    if (stored) {
+      setUser(JSON.parse(stored));
     }
+    setIsLoading(false);
+  }, []);
 
+  const login = useCallback(async (email: string, password: string): Promise<string | null> => {
     try {
-      const { user } = await api.auth.me();
-      setUser(user);
+      const res = await fetch(`${config.apiUrl}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) return data.error || "Login failed";
+      setUser(data.user);
+      localStorage.setItem("instigpt_user", JSON.stringify(data.user));
+      return null;
     } catch {
-      setUser(null);
-    } finally {
-      setIsLoading(false);
+      return "Could not connect to server";
     }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  const signup = useCallback(async (email: string, password: string, name: string): Promise<string | null> => {
+    try {
+      const res = await fetch(`${config.apiUrl}/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password, name }),
+      });
+      const data = await res.json();
+      if (!res.ok) return data.error || "Signup failed";
+      setUser(data.user);
+      localStorage.setItem("instigpt_user", JSON.stringify(data.user));
+      return null;
+    } catch {
+      return "Could not connect to server";
+    }
+  }, []);
 
   const logout = useCallback(async () => {
-    if (!config.isDev) {
-      await api.auth.logout();
-    }
+    await fetch(`${config.apiUrl}/auth/logout`, { credentials: "include" }).catch(() => {});
     setUser(null);
+    localStorage.removeItem("instigpt_user");
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, logout, refresh }}>
+    <AuthContext.Provider value={{ user, isLoading, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );

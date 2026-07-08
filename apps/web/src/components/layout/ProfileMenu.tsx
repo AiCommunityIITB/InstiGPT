@@ -54,11 +54,6 @@ export function ProfileMenu() {
           <div className="border-b border-border px-3 py-2.5">
             <p className="text-xs font-medium text-foreground">{user.name}</p>
             <p className="mt-0.5 text-2xs text-foreground-subtle">{user.email}</p>
-            {user.department && (
-              <p className="mt-0.5 text-2xs text-foreground-subtle">
-                {user.program} · {user.department}
-              </p>
-            )}
           </div>
 
           {/* Menu items */}

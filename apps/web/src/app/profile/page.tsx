@@ -33,7 +33,6 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-[100dvh] bg-background">
-      {/* Header */}
       <header className="flex h-12 items-center gap-2 border-b border-border px-3">
         <Link href="/">
           <IconButton label="Back">
@@ -44,29 +43,18 @@ export default function ProfilePage() {
       </header>
 
       <div className="mx-auto max-w-md px-4 py-8">
-        {/* Avatar */}
         <div className="flex flex-col items-center">
           <div className="flex h-16 w-16 items-center justify-center rounded-full border border-border bg-background-surface text-lg font-medium text-foreground">
             {initials}
           </div>
           <h1 className="mt-3 text-base font-medium text-foreground">{user.name}</h1>
-          <p className="text-xs text-foreground-subtle">@{user.username}</p>
+          <p className="text-xs text-foreground-subtle">{user.email}</p>
         </div>
 
-        {/* Details */}
         <div className="mt-8 space-y-1">
           <DetailRow label="Email" value={user.email} />
-          <DetailRow label="Roll Number" value={user.roll_number} />
-          {user.department && <DetailRow label="Department" value={user.department} />}
-          {user.program && <DetailRow label="Program" value={user.program} />}
-          {user.year && <DetailRow label="Admission Year" value={String(user.year)} />}
+          <DetailRow label="Name" value={user.name} />
         </div>
-
-        {/* Info */}
-        <p className="mt-8 text-center text-2xs text-foreground-subtle leading-relaxed">
-          Profile information is pulled from IIT Bombay SSO.
-          Contact the Gymkhana office to update your details.
-        </p>
       </div>
     </div>
   );
