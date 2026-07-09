@@ -340,8 +340,8 @@ Format:
 - For fun facts: Give genuinely obscure, surprising facts that only someone who studied at IITB would know. NOT generic things like "Mood Indigo is big" or "campus is near a forest" — those are boring. Think: specific traditions, hidden spots on campus, weird rules, legendary incidents, quirky professor stories, or absurd statistics.`;
   }
 
-  if (user?.department || user?.program) {
-    prompt += `\n\nStudent: ${user.name || "Unknown"}, ${user.program || ""} ${user.department || ""}, Year ${user.year || "?"}`;
+  if (user?.department && user?.program && user.name && user.name !== "Anonymous" && user.name !== "Dev User") {
+    prompt += `\n\nThe student asking is: ${user.name}, ${user.program} ${user.department}, Year ${user.year || "?"}. Personalize your answer if relevant.`;
   }
 
   // Attach context

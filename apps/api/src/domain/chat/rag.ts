@@ -41,8 +41,8 @@ function routeQuery(query: string): QueryIntent {
     return "fun";
   }
 
-  // Meta (about the bot itself)
-  if (/(who (are|made|built) you|what (are|can) you|instigpt|your (name|purpose))/i.test(q)) {
+  // Meta (about the bot itself or identity questions)
+  if (/(who (are|made|built) you|what (are|can) you|instigpt|your (name|purpose)|who am i)/i.test(q)) {
     return "meta";
   }
 
