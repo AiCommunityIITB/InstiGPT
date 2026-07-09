@@ -64,6 +64,7 @@ export interface ChatDeps {
   webSearch: WebSearchPort;
   messages: MessageStore;
   conversations: ConversationStore;
+  reranker?: import("../../infra/search/reranker").RerankerPort;
 }
 
 export interface ChatInput {
@@ -94,7 +95,7 @@ export type ChatStreamEvent =
  * - Streams LLM responses
  * - Persists messages
  * - Generates title for first exchange
- * - Generates follow-up questions
+ * - Generates follow-up questions (in parallel with streaming)
  */
 export async function* chat(
   input: ChatInput,
@@ -130,13 +131,14 @@ export async function* chat(
     }
   }
 
-  // 4. Run production RAG pipeline (route → expand → retrieve → RRF → confidence)
+  // 4. Run production RAG pipeline (route → rewrite → expand → retrieve → RRF → confidence)
   const ragResult = await ragPipeline({
     query: searchQuery,
     llm: deps.llm,
     search: deps.search,
     embedding: deps.embedding,
     webSearch: deps.webSearch,
+    reranker: deps.reranker,
   });
 
   const allSources = ragResult.sources;
@@ -153,10 +155,15 @@ export async function* chat(
 
   yield { type: "sources", sources: displaySources };
 
-  // 6. Build prompt (adapt based on retrieval confidence)
+  // 5. Start follow-up generation in parallel (fire-and-forget promise)
+  // This runs concurrently while the LLM streams the main answer
+  const followupPromise = generateFollowups(deps.llm, question, allSources);
+
+  // 6. Build prompt with relevance-filtered history
+  const relevantHistory = filterHistoryByRelevance(history, question);
   const systemPrompt = buildSystemPrompt(allSources, user, ragResult.confidence, ragResult);
   const messages = [
-    ...history.slice(-10).map((m) => ({
+    ...relevantHistory.map((m) => ({
       role: m.role as "user" | "assistant",
       content: m.content,
     })),
@@ -211,18 +218,91 @@ export async function* chat(
     }
   }
 
-  // 11. Generate follow-up questions
+  // 11. Await follow-up questions (already computed in parallel)
   try {
-    const followupPrompt = `Based on this Q&A, suggest 3 brief follow-up questions the user might ask next. Make each one distinct and specific. Return ONLY a JSON array of 3 strings, nothing else.\n\nQuestion: ${question}\n\nAnswer: ${fullContent.slice(0, 500)}`;
-    const followupRaw = await deps.llm.complete(followupPrompt);
-    const parsed = JSON.parse(followupRaw);
-    if (Array.isArray(parsed) && parsed.length > 0) {
-      const unique = [...new Set(parsed as string[])].slice(0, 3);
-      yield { type: "followups", questions: unique };
+    const followups = await followupPromise;
+    if (followups.length > 0) {
+      yield { type: "followups", questions: followups };
     }
   } catch {
     // Follow-up generation is non-critical, silently ignore failures
   }
+}
+
+// ═══ Parallel Follow-up Generation ═══
+// Starts generating follow-ups as soon as sources are ready,
+// runs concurrently with the main LLM stream (saves 1-2s)
+
+async function generateFollowups(
+  llm: LLMPort,
+  question: string,
+  sources: Source[]
+): Promise<string[]> {
+  // Use sources context to generate more relevant follow-ups
+  const contextHint = sources
+    .slice(0, 3)
+    .map((s) => s.title)
+    .filter(Boolean)
+    .join(", ");
+
+  const prompt = `Based on this question about IIT Bombay and these source topics, suggest 3 brief follow-up questions the student might ask next. Make each distinct and specific.${contextHint ? ` Topics found: ${contextHint}.` : ""} Return ONLY a JSON array of 3 strings, nothing else.
+
+Question: "${question}"`;
+
+  const raw = await llm.complete(prompt);
+  const parsed = JSON.parse(raw);
+  if (Array.isArray(parsed) && parsed.length > 0) {
+    return [...new Set(parsed as string[])].slice(0, 3);
+  }
+  return [];
+}
+
+// ═══ Relevance-Based History Filtering ═══
+// Instead of blindly taking the last N messages, keep the most recent
+// exchanges plus older messages that are topically relevant to the
+// current question. Reduces noise and saves tokens.
+
+function filterHistoryByRelevance(
+  history: Message[],
+  currentQuestion: string,
+  maxMessages: number = 10
+): Message[] {
+  if (history.length <= 4) return history; // Short history: keep all
+
+  // Always keep the last 2 exchanges (4 messages) for immediate context
+  const recentCount = Math.min(4, history.length);
+  const recent = history.slice(-recentCount);
+  const older = history.slice(0, -recentCount);
+
+  if (older.length === 0) return recent;
+
+  // Score older messages by keyword overlap with current question
+  const queryTerms = currentQuestion
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length > 2);
+
+  const scored = older.map((msg) => {
+    const content = msg.content.toLowerCase();
+    const matchCount = queryTerms.filter((t) => content.includes(t)).length;
+    const score = matchCount / Math.max(queryTerms.length, 1);
+    return { msg, score };
+  });
+
+  // Keep messages that have at least some relevance (> 20% term overlap)
+  const relevant = scored
+    .filter((s) => s.score > 0.2)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxMessages - recentCount)
+    .map((s) => s.msg);
+
+  // Combine and maintain chronological order
+  const combined = [...relevant, ...recent];
+  combined.sort((a, b) =>
+    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+
+  return combined.slice(-maxMessages);
 }
 
 // ═══ Prompt Construction (domain logic, not infra) ═══

@@ -11,6 +11,7 @@ import { createGeminiLLM } from "../../infra/llm/gemini";
 import { createCFEmbedding, createLocalEmbedding } from "../../infra/embeddings/cloudflare";
 import { createHybridSearch } from "../../infra/search/hybrid";
 import { createDDGSearch } from "../../infra/search/web";
+import { createJinaReranker } from "../../infra/search/reranker";
 import { createSemanticCache } from "../../infra/cache/semantic";
 import { chat } from "../../domain/chat";
 import { authMiddleware } from "../middleware/auth";
@@ -113,6 +114,7 @@ chatRoutes.post("/", async (c) => {
     webSearch: createDDGSearch(),
     messages: createMessageStore(sb),
     conversations: createConversationStore(sb),
+    reranker: createJinaReranker(c.env.JINA_API_KEY),
   };
 
   return streamSSE(c, async (stream) => {

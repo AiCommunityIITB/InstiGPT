@@ -148,7 +148,7 @@ async function vectorSearch(
   const { data } = await sb.rpc("search_chunks", {
     query_embedding: embedding,
     match_count: limit,
-    similarity_threshold: 0.3,
+    similarity_threshold: 0.35,
   });
   return data || [];
 }

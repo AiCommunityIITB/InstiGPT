@@ -4,14 +4,22 @@
 /**
  * Feedback route.
  * Stores thumbs up/down from users so we can track which answers
- * are good and which need improvement. This data will eventually
- * feed into evaluation and prompt tuning.
+ * are good and which need improvement. Includes optional reason
+ * categories (wrong info, irrelevant, incomplete, hallucination,
+ * outdated) to identify systematic retrieval/prompting issues.
  */
 import { Hono } from "hono";
 import type { Env, UserContext } from "../../types";
 import { createConfig } from "../../config";
 import { createSupabase } from "../../infra/db/supabase";
 import { authMiddleware } from "../middleware/auth";
+
+export type FeedbackReason =
+  | "wrong_info"
+  | "irrelevant"
+  | "incomplete"
+  | "hallucination"
+  | "outdated";
 
 export const feedbackRoutes = new Hono<{
   Bindings: Env;
@@ -25,6 +33,8 @@ feedbackRoutes.post("/", async (c) => {
     message_id: string;
     conversation_id: string;
     type: "positive" | "negative";
+    reason?: FeedbackReason;
+    comment?: string;
   }>();
 
   if (!body.message_id || !body.conversation_id || !body.type) {
@@ -33,6 +43,13 @@ feedbackRoutes.post("/", async (c) => {
 
   if (body.type !== "positive" && body.type !== "negative") {
     return c.json({ error: "type must be 'positive' or 'negative'" }, 400);
+  }
+
+  const validReasons: FeedbackReason[] = [
+    "wrong_info", "irrelevant", "incomplete", "hallucination", "outdated",
+  ];
+  if (body.reason && !validReasons.includes(body.reason)) {
+    return c.json({ error: `reason must be one of: ${validReasons.join(", ")}` }, 400);
   }
 
   const user = c.get("user");
@@ -44,6 +61,8 @@ feedbackRoutes.post("/", async (c) => {
     conversation_id: body.conversation_id,
     user_id: user.id,
     type: body.type,
+    reason: body.reason || null,
+    comment: body.comment?.slice(0, 500) || null,
   });
 
   if (error) {

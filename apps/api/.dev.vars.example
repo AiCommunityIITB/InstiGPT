@@ -5,3 +5,5 @@ SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 SSO_CLIENT_ID=your_sso_client_id
 SSO_CLIENT_SECRET=your_sso_client_secret
 SSO_REDIRECT_URL=http://localhost:5173/login
+# Optional: enables cross-encoder reranking (free tier: 1M tokens/month)
+JINA_API_KEY=your_jina_api_key

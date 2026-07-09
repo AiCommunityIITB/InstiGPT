@@ -16,6 +16,7 @@
  */
 import type { Source } from "@instigpt/shared";
 import type { LLMPort, SearchPort, EmbeddingPort, WebSearchPort } from "./service";
+import type { RerankerPort } from "../../infra/search/reranker";
 
 // ═══ Query Router ═══
 
@@ -52,6 +53,38 @@ function routeQuery(query: string): QueryIntent {
 
   // Default: knowledge retrieval
   return "knowledge";
+}
+
+// ═══ Query Rewriting for Optimal Retrieval ═══
+// Rewrites natural language questions into search-optimized terms
+// before embedding. This improves recall significantly for colloquial queries.
+
+async function rewriteForRetrieval(
+  query: string,
+  intent: QueryIntent,
+  llm: LLMPort
+): Promise<string> {
+  // Skip rewriting for very short queries or non-knowledge intents
+  if (intent !== "knowledge" && intent !== "web_needed") return query;
+  if (query.split(" ").length <= 3) return query;
+
+  // If it already looks like a search query (keywords, no question mark), skip
+  const isAlreadyKeywords = !/[?]/.test(query) && query.split(" ").length <= 6;
+  if (isAlreadyKeywords) return query;
+
+  try {
+    const prompt = `Rewrite this IIT Bombay student question into optimal search keywords for a knowledge base. Keep under 25 words. Include specific terms like course codes, department names, or policy names when implied. Return ONLY the rewritten query, nothing else.
+
+Question: "${query}"
+
+Search query:`;
+
+    const result = await llm.complete(prompt);
+    if (!result || result.length < 5 || result.length > 200) return query;
+    return result.replace(/^["']|["']$/g, "").trim();
+  } catch {
+    return query; // Fallback to original on any error
+  }
 }
 
 // ═══ Multi-Query Generation (1 LLM call max) ═══
@@ -202,6 +235,7 @@ export interface RAGInput {
   search: SearchPort;
   embedding: EmbeddingPort;
   webSearch: WebSearchPort;
+  reranker?: RerankerPort;
 }
 
 export interface RAGResult {
@@ -212,7 +246,7 @@ export interface RAGResult {
 }
 
 export async function ragPipeline(input: RAGInput): Promise<RAGResult> {
-  const { query, llm, search, embedding, webSearch } = input;
+  const { query, llm, search, embedding, webSearch, reranker } = input;
 
   // 1. Route the query
   const queryType = routeQuery(query);
@@ -226,10 +260,13 @@ export async function ragPipeline(input: RAGInput): Promise<RAGResult> {
     return { sources: [], queryType, confidence: "none", expandedQueries: [query] };
   }
 
-  // 2. Generate search queries (0-1 LLM calls)
-  const expandedQueries = await generateSearchQueries(query, queryType, llm);
+  // 2. Rewrite query for optimal retrieval (intent-aware rewriting)
+  const rewrittenQuery = await rewriteForRetrieval(query, queryType, llm);
 
-  // 3. Parallel retrieval with all queries
+  // 3. Generate search queries (0-1 LLM calls)
+  const expandedQueries = await generateSearchQueries(rewrittenQuery, queryType, llm);
+
+  // 4. Parallel retrieval with all queries
   const embeddings = await Promise.all(expandedQueries.map((q) => embedding.embed(q)));
 
   const retrievalPromises: Promise<Source[]>[] = [
@@ -246,23 +283,38 @@ export async function ragPipeline(input: RAGInput): Promise<RAGResult> {
 
   const results = await Promise.all(retrievalPromises);
 
-  // 4. Separate web results from RAG results for different fusion
+  // 5. Separate web results from RAG results for different fusion
   const webResults = results[results.length - 1];
   const ragResults = results.slice(0, -1);
 
-  // 5. Apply Reciprocal Rank Fusion to RAG results
+  // 6. Apply Reciprocal Rank Fusion to RAG results
   const fusedRAG = reciprocalRankFusion(ragResults);
 
-  // 6. Merge web results (placed after RAG results)
+  // 6b. Cross-encoder reranking (if available) — dramatically improves precision
+  // Reranks top 15 candidates using Jina's semantic model
+  const rerankedRAG = reranker
+    ? await reranker.rerank(query, fusedRAG.slice(0, 15), 8)
+    : fusedRAG;
+
+  // 7. Distance-threshold filtering: drop weakly-related chunks
+  // This prevents garbage chunks from wasting LLM tokens
+  const thresholdFiltered = rerankedRAG.filter((s) => {
+    // Graph sources always pass (they're already high precision)
+    if (s.source_type === "graph") return true;
+    // Document sources need minimum relevance after RRF
+    return s.relevance_score > 0.005;
+  });
+
+  // 8. Merge web results (placed after RAG results)
   const allSources = [
-    ...fusedRAG,
+    ...thresholdFiltered,
     ...webResults.map((s) => ({ ...s, relevance_score: 0.01 })), // Web gets lowest RRF
   ];
 
-  // 7. Score confidence
+  // 9. Score confidence
   const { sources: scoredSources, confidence } = scoreConfidence(allSources, query);
 
-  // 8. Optimize for context window
+  // 10. Optimize for context window
   const optimized = optimizeForContext(scoredSources, confidence);
 
   return {

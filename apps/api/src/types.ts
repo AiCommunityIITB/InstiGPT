@@ -10,6 +10,7 @@ export interface Env {
   SSO_REDIRECT_URL: string;
   ENVIRONMENT: string;
   AI?: Ai;
+  JINA_API_KEY?: string;
 }
 
 /**
