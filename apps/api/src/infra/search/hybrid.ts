@@ -350,37 +350,35 @@ function mergeAndRank(
 // ─── Source title formatting ───
 
 function formatSourceTitle(rawSource: string, metadata: Record<string, unknown>): string {
-  // Known source mappings for clear display names
-  const friendlyNames: Record<string, string> = {
-    ugrulebook: "UG Rulebook",
-    campus_life_guide: "Campus Life Guide",
-    itc_annual_report: "ITC Annual Report",
-    resobin_courses_final: "Course Reviews (Resobin)",
-    grades: "Grade Statistics",
-    mech_damp_courses: "Mech DAMP Courses",
-    elec_damp_intern: "Elec DAMP Internships",
-    elec_damp_project: "Elec DAMP Projects",
-    elec_damp_minor: "Elec DAMP Minor",
-  };
-
-  // Check for known source first
-  const lower = rawSource.toLowerCase().replace(/\.[^/.]+$/, "");
-  if (friendlyNames[lower]) {
+  // Prefer display_name from metadata (set during embedding pipeline)
+  if (metadata?.display_name && typeof metadata.display_name === "string") {
     const section = metadata?.section as string | undefined;
-    return section ? `${friendlyNames[lower]} (${section})` : friendlyNames[lower];
+    return section ? `${metadata.display_name} (${section})` : metadata.display_name;
   }
 
-  // Try to build a meaningful title from metadata
+  // Fallback: derive a readable title from the raw source string
   const section = metadata?.section as string | undefined;
   const page = metadata?.page as number | undefined;
   const category = metadata?.category as string | undefined;
 
-  // Clean up the raw source path (remove file extensions, path separators)
   let title = rawSource
     .replace(/\.[^/.]+$/, "")           // Remove file extension
     .replace(/^.*[/\\]/, "")            // Remove path prefix
     .replace(/[_-]+/g, " ")            // Replace separators with spaces
-    .replace(/\b\w/g, (c) => c.toUpperCase()); // Title case
+    .trim();
+
+  // Split known compound words that come in without separators
+  title = title
+    .replace(/ugrulebook/i, "UG Rulebook")
+    .replace(/resobin/i, "Resobin");
+
+  // Title case, but preserve known acronyms
+  title = title.replace(/\b\w+/g, (word) => {
+    const upper = word.toUpperCase();
+    const acronyms = ["IIT", "IITB", "CSE", "EE", "UG", "PG", "CPI", "SPI", "DAMP", "SAC", "ITC", "HASMED"];
+    if (acronyms.includes(upper)) return upper;
+    return word.charAt(0).toUpperCase() + word.slice(1);
+  });
 
   if (section) {
     title = `${title} (${section})`;

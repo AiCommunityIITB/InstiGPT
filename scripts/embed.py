@@ -38,20 +38,24 @@ CHUNK_CONFIGS = {
     "default": {"chunk_size": 1000, "chunk_overlap": 200},    # Fallback
 }
 
-# Document type → context prefix mapping
+# Document type -> context prefix mapping
+# The key is matched against filenames. The value is used as both:
+# 1. A prefix prepended to chunk content for better embedding quality
+# 2. The display_name stored in metadata for clean source attribution in the UI
 CONTEXT_PREFIXES = {
-    "ugrulebook": "IIT Bombay UG Rulebook — Academic Rules and Regulations",
-    "Bluebook": "IIT Bombay Blue Book — Student Guide",
-    "SAC-Constitution": "Student Activity Centre Constitution",
-    "Course Info": "IIT Bombay Course Information",
-    "Apping Guide": "Internship and Placement Application Guide",
-    "Non-Core Apping": "Non-Core Apping Guide for IITB Students",
-    "Hostel": "IIT Bombay Hostel Information",
+    "ugrulebook": "UG Rulebook",
+    "Bluebook": "Bluebook (Student Guide)",
+    "SAC-Constitution": "SAC Constitution",
+    "Course Info": "Course Information Booklet",
+    "Apping Guide": "Apping Guide",
+    "Non-Core Apping": "Non-Core Apping Guide",
+    "Hostel": "Hostel Information",
     "Updated_DD_Curriculum": "Dual Degree Curriculum Guide",
-    "MInDS Minor": "CMInDS Minor Degree Information",
-    "resobin_courses": "ResoBin Course Reviews and Information",
-    "grades": "IIT Bombay Course Grades Data",
-    "itc": "Inter-IIT Tech Council",
+    "MInDS Minor": "CMInDS Minor Degree",
+    "resobin_courses": "Course Reviews (Resobin)",
+    "grades": "Grade Statistics",
+    "itc": "ITC Annual Report",
+    "campus_life": "Campus Life Guide",
 }
 
 def get_chunk_config(file_path: Path, file_type: str) -> dict:
@@ -75,6 +79,14 @@ def get_context_prefix(source: str) -> str:
         if key.lower() in source.lower():
             return prefix
     return ""
+
+def get_display_name(source: str) -> str:
+    """Get a human-readable display name for a source. Falls back to cleaned source string."""
+    for key, name in CONTEXT_PREFIXES.items():
+        if key.lower() in source.lower():
+            return name
+    # Fallback: clean up the source string
+    return source.replace("_", " ").replace("-", " ").strip().title()
 
 # Init
 console.print("[bold]Loading embedding model...[/bold]")
@@ -114,7 +126,8 @@ def load_pdf(path: Path) -> list[dict]:
     splitter = make_splitter(config)
     chunks = splitter.split_text(full_text)
     prefix = get_context_prefix(path.stem)
-    return [{"content": f"[{prefix}] {c}" if prefix else c, "source": path.stem, "metadata": {"type": "pdf", "file": path.name}} for c in chunks if c.strip()]
+    display_name = get_display_name(path.stem)
+    return [{"content": f"[{prefix}] {c}" if prefix else c, "source": path.stem, "metadata": {"type": "pdf", "file": path.name, "display_name": display_name}} for c in chunks if c.strip()]
 
 
 def load_json_file(path: Path) -> list[dict]:
