@@ -70,6 +70,14 @@ export async function authMiddleware(
     // Increment message count
     anonMessageCount.set(anonId, count + 1);
 
+    // Ensure anonymous user exists in DB (for FK constraints on conversations)
+    const config = createConfig(c.env);
+    const sb = createSupabase(config);
+    await sb.from("users").upsert(
+      { id: anonId, username: `anon_${ipHash}`, name: "Anonymous", email: "" },
+      { onConflict: "id" }
+    );
+
     c.set("user", {
       id: anonId,
       username: "anonymous",

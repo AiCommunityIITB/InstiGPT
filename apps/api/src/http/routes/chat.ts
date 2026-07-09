@@ -110,51 +110,59 @@ chatRoutes.post("/", async (c) => {
 
   return streamSSE(c, async (stream) => {
     let fullContent = "";
-    const events = chat(
-      { question: question.trim(), conversationId: conversation_id, user },
-      deps
-    );
+    try {
+      const events = chat(
+        { question: question.trim(), conversationId: conversation_id, user },
+        deps
+      );
 
-    for await (const event of events) {
-      switch (event.type) {
-        case "metadata":
-          await stream.writeSSE({
-            event: "metadata",
-            data: JSON.stringify({ conversation_id: event.conversationId }),
-          });
-          break;
-        case "sources":
-          await stream.writeSSE({
-            event: "sources",
-            data: JSON.stringify(event.sources),
-          });
-          break;
-        case "token":
-          fullContent += event.token;
-          await stream.writeSSE({ event: "token", data: event.token });
-          break;
-        case "done":
-          await stream.writeSSE({ event: "done", data: "{}" });
-          break;
-        case "title":
-          await stream.writeSSE({
-            event: "title",
-            data: JSON.stringify({ title: event.title }),
-          });
-          break;
-        case "followups":
-          await stream.writeSSE({
-            event: "followups",
-            data: JSON.stringify(event.questions),
-          });
-          break;
-        case "error":
-          await stream.writeSSE({
-            event: "error",
-            data: JSON.stringify({ error: event.message }),
-          });
-          break;
+      for await (const event of events) {
+        switch (event.type) {
+          case "metadata":
+            await stream.writeSSE({
+              event: "metadata",
+              data: JSON.stringify({ conversation_id: event.conversationId }),
+            });
+            break;
+          case "sources":
+            await stream.writeSSE({
+              event: "sources",
+              data: JSON.stringify(event.sources),
+            });
+            break;
+          case "token":
+            fullContent += event.token;
+            await stream.writeSSE({ event: "token", data: event.token });
+            break;
+          case "done":
+            await stream.writeSSE({ event: "done", data: "{}" });
+            break;
+          case "title":
+            await stream.writeSSE({
+              event: "title",
+              data: JSON.stringify({ title: event.title }),
+            });
+            break;
+          case "followups":
+            await stream.writeSSE({
+              event: "followups",
+              data: JSON.stringify(event.questions),
+            });
+            break;
+          case "error":
+            await stream.writeSSE({
+              event: "error",
+              data: JSON.stringify({ error: event.message }),
+            });
+            break;
+        }
       }
+    } catch (err: any) {
+      console.error("Chat stream error:", err?.message || err);
+      await stream.writeSSE({
+        event: "error",
+        data: JSON.stringify({ error: err?.message || "Internal error" }),
+      });
     }
 
     // Store in cache for future identical questions (only cacheable queries)
