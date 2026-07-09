@@ -40,9 +40,17 @@ chatRoutes.post("/", async (c) => {
   const embeddingPort = c.env.AI ? createCFEmbedding(c.env.AI) : createLocalEmbedding();
   const cache = createSemanticCache(sb);
 
-  // Check semantic cache before running full RAG pipeline
+  // Skip cache for fun/conversational/meta queries.
+  // These need the LLM to freestyle, not return a cached factual answer.
+  const q = question.trim().toLowerCase();
+  const skipCache =
+    /(roast|joke|funny|meme|fun fact|stereotype|savage|burn)/i.test(q) ||
+    /(who (are|made|built) you|what (are|can) you|instigpt)/i.test(q) ||
+    (q.split(" ").length <= 5 && /^(hi|hello|hey|thanks|okay|ok|bye|sup|yo)/i.test(q));
+
+  // Check semantic cache (only for knowledge queries)
   const queryEmbedding = await embeddingPort.embed(question.trim());
-  const cacheHit = await cache.check(queryEmbedding);
+  const cacheHit = skipCache ? null : await cache.check(queryEmbedding);
 
   if (cacheHit) {
     // Stream cached response token-by-token for consistent UX
@@ -156,8 +164,8 @@ chatRoutes.post("/", async (c) => {
       }
     }
 
-    // Store in semantic cache after successful response
-    if (fullContent.length > 0) {
+    // Store in semantic cache (only knowledge queries, not fun/roast/conversational)
+    if (fullContent.length > 0 && !skipCache) {
       try {
         await cache.store(question.trim(), queryEmbedding, fullContent, []);
       } catch {
