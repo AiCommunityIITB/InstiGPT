@@ -1,6 +1,10 @@
 /**
- * Rate limiting middleware — sliding window, in-memory.
- * Limits: 15 messages per minute per user.
+ * Rate limiting middleware.
+ *
+ * Uses a sliding window: 15 messages per minute per user.
+ * Storage is in-memory, which means limits reset on worker cold start.
+ * That's fine for our scale. If we ever need persistence, swap to
+ * Workers KV or Upstash Redis.
  */
 import { Context, Next } from "hono";
 import type { Env, UserContext } from "../../types";

@@ -3,6 +3,19 @@ export interface SSEEvent {
   data: string;
 }
 
+/**
+ * Parses a Server-Sent Events stream from a fetch Response.
+ *
+ * SSE format is text lines like:
+ *   event: token
+ *   data: hello
+ *
+ * Blocks of lines are separated by double newlines. This generator
+ * reads the response body chunk by chunk, buffers partial blocks,
+ * and yields one event at a time.
+ *
+ * Usage: for await (const ev of parseSSEStream(response)) { ... }
+ */
 export async function* parseSSEStream(
   response: Response
 ): AsyncGenerator<SSEEvent> {

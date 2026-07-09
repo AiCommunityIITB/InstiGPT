@@ -1,6 +1,12 @@
 /**
- * Auth middleware — validates session cookie.
- * Supports anonymous users with a 5-message limit.
+ * Auth middleware.
+ *
+ * Three modes:
+ * 1. Development: bypassed entirely, you get a fake "Dev User"
+ * 2. Authenticated: validates the session cookie against the DB
+ * 3. Anonymous: no cookie = anonymous user, limited to 5 messages
+ *    (tracked in-memory by IP hash). After 5, returns 401 with
+ *    code "ANON_LIMIT" so the frontend can prompt signup.
  */
 import { Context, Next } from "hono";
 import { getCookie } from "hono/cookie";

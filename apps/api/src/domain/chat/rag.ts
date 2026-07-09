@@ -1,17 +1,18 @@
 /**
- * Production-grade RAG pipeline.
+ * RAG pipeline for InstiGPT.
  *
- * Techniques borrowed from:
- * - Onyx (30.8k ⭐): Hybrid search + reranking + confidence scoring
- * - Verba (7.7k ⭐): Sentence-window retrieval + query routing
- * - VectorHub: Reciprocal Rank Fusion (RRF) for hybrid merge
- * - Azure RAG Template: Semantic ranking + metadata filtering
+ * This is where retrieval quality lives. The pipeline:
+ * 1. Routes the query (do we need RAG at all, or is this just "hi"?)
+ * 2. Expands complex queries into multiple search variants
+ * 3. Runs vector + keyword + graph search in parallel
+ * 4. Merges results with Reciprocal Rank Fusion (RRF)
+ * 5. Re-ranks with a heuristic cross-encoder (term/bigram overlap)
+ * 6. Scores confidence (should we even show sources?)
+ * 7. Fits everything into the LLM's context budget
  *
- * Design principles:
- * 1. Minimize LLM calls (max 1 pre-generation call)
- * 2. Maximize retrieval precision with RRF fusion
- * 3. Only show sources when retrieval is confident
- * 4. Route queries to appropriate strategies
+ * The goal: minimize LLM calls (max 1 pre-generation) while
+ * maximizing retrieval precision. We'd rather show nothing than
+ * show irrelevant sources that confuse the answer.
  */
 import type { Source } from "@instigpt/shared";
 import type { LLMPort, SearchPort, EmbeddingPort, WebSearchPort } from "./service";

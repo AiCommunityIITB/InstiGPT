@@ -1,6 +1,12 @@
 /**
  * Feedback HTTP route — stores user feedback on messages.
  */
+/**
+ * Feedback route.
+ * Stores thumbs up/down from users so we can track which answers
+ * are good and which need improvement. This data will eventually
+ * feed into evaluation and prompt tuning.
+ */
 import { Hono } from "hono";
 import type { Env, UserContext } from "../../types";
 import { createConfig } from "../../config";

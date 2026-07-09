@@ -1,6 +1,13 @@
 /**
- * Semantic cache — stores and retrieves cached RAG responses
- * based on query embedding similarity.
+ * Semantic cache for RAG responses.
+ *
+ * Before running the full pipeline (embed + search + LLM), we check if
+ * someone has asked a nearly identical question recently. If the cosine
+ * similarity is above 0.98, we return the cached response.
+ *
+ * Cache entries expire after 24 hours. This prevents stale answers
+ * while still saving tokens for common questions like "what's the
+ * branch change CPI requirement?"
  */
 import { SupabaseClient } from "@supabase/supabase-js";
 

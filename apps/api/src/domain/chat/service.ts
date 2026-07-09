@@ -1,8 +1,16 @@
 /**
- * Chat domain — pure business logic.
+ * Chat service: the core of InstiGPT.
  *
- * This module defines WHAT the chat system does, not HOW.
- * It depends only on interfaces (ports), never on concrete implementations.
+ * This is an async generator that orchestrates the entire chat flow:
+ * 1. Create or resolve the conversation
+ * 2. Condense follow-up questions using chat history
+ * 3. Run the RAG pipeline (retrieval + ranking)
+ * 4. Stream the LLM response token by token
+ * 5. Save messages to the database
+ * 6. Generate a title (if first message) and follow-up suggestions
+ *
+ * The function depends only on interfaces (ports), never on concrete
+ * implementations. All I/O is injected via the `deps` object.
  */
 import type { UserContext } from "../../types";
 import type { Source, Message } from "@instigpt/shared";

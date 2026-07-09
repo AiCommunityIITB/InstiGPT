@@ -1,5 +1,16 @@
 "use client";
 
+/**
+ * useChat hook - the core of the chat experience.
+ *
+ * Handles sending messages, streaming the response token by token,
+ * parsing SSE events (sources, follow-ups, title, errors), and
+ * managing the message array that the UI renders.
+ *
+ * This hook never touches the DOM. It just manages state and the
+ * streaming connection. The UI components read from it.
+ */
+
 import { useState, useCallback, useRef, useEffect } from "react";
 import { api } from "@/lib/api";
 import { parseSSEStream } from "@/lib/sse";

@@ -1,6 +1,14 @@
 /**
- * Supabase hybrid search adapter.
- * Combines vector similarity, full-text search, and knowledge graph traversal.
+ * Hybrid search adapter.
+ *
+ * Combines three retrieval strategies in parallel:
+ * - Vector search (semantic similarity via pgvector)
+ * - Keyword search (Postgres full-text search with ts_rank)
+ * - Knowledge graph (entity lookup + relationship traversal)
+ *
+ * Results from all three are merged, with graph results getting highest
+ * priority, then vector, then keyword. The cross-encoder pass at the end
+ * re-ranks everything using term overlap and bigram matching.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SearchPort } from "../../domain/chat";
