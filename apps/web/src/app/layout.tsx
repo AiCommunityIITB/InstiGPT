@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { AuthProvider } from "@/hooks/useAuth";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import "./globals.css";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"] });
@@ -22,7 +23,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className={`${inter.variable} ${mono.variable} font-sans`}>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider><ErrorBoundary>{children}</ErrorBoundary></AuthProvider>
       </body>
     </html>
   );

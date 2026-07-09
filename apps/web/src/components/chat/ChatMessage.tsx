@@ -6,9 +6,16 @@ import remarkGfm from "remark-gfm";
 import { LoadingDots } from "@/components/ui";
 import { SourceCitations } from "@/components/sources/SourceCitations";
 import { MessageFeedback } from "@/components/feedback/MessageFeedback";
+import { FollowUpChips } from "@/components/chat/FollowUpChips";
 import type { ChatMessage as MsgType } from "@/hooks/useChat";
 
-export function ChatMessage({ message }: { message: MsgType }) {
+interface Props {
+  message: MsgType;
+  conversationId?: string | null;
+  onAsk?: (question: string) => void;
+}
+
+export function ChatMessage({ message, conversationId, onAsk }: Props) {
   const isUser = message.role === "user";
 
   return (
@@ -17,7 +24,11 @@ export function ChatMessage({ message }: { message: MsgType }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: "easeOut" }}
     >
-      {isUser ? <UserBubble content={message.content} /> : <AssistantBlock message={message} />}
+      {isUser ? (
+        <UserBubble content={message.content} />
+      ) : (
+        <AssistantBlock message={message} conversationId={conversationId} onAsk={onAsk} />
+      )}
     </motion.div>
   );
 }
@@ -32,7 +43,13 @@ function UserBubble({ content }: { content: string }) {
   );
 }
 
-function AssistantBlock({ message }: { message: MsgType }) {
+interface AssistantBlockProps {
+  message: MsgType;
+  conversationId?: string | null;
+  onAsk?: (question: string) => void;
+}
+
+function AssistantBlock({ message, conversationId, onAsk }: AssistantBlockProps) {
   const isDone = !message.isStreaming && message.content.length > 0;
 
   return (
@@ -58,7 +75,12 @@ function AssistantBlock({ message }: { message: MsgType }) {
             )}
 
             {/* Feedback — only show when done streaming */}
-            {isDone && <MessageFeedback messageId={message.id} />}
+            {isDone && <MessageFeedback messageId={message.id} conversationId={conversationId} />}
+
+            {/* Follow-up chips — only show when done streaming */}
+            {isDone && message.followups && message.followups.length > 0 && onAsk && (
+              <FollowUpChips followups={message.followups} onAsk={onAsk} />
+            )}
           </>
         ) : message.isStreaming ? (
           <div className="py-1">

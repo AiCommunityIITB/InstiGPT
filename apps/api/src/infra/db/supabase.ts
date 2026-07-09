@@ -178,5 +178,12 @@ export function createConversationStore(sb: SupabaseClient): ConversationStore {
         .update({ updated_at: new Date().toISOString() })
         .eq("id", id);
     },
+
+    async updateTitle(id, title) {
+      await sb
+        .from("conversations")
+        .update({ title, updated_at: new Date().toISOString() })
+        .eq("id", id);
+    },
   };
 }

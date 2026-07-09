@@ -44,6 +44,7 @@ export interface MessageStore {
 export interface ConversationStore {
   create(userId: string, title: string): Promise<{ id: string }>;
   updateTimestamp(id: string): Promise<void>;
+  updateTitle(id: string, title: string): Promise<void>;
 }
 
 // ═══ Chat Service ═══
@@ -73,7 +74,9 @@ export type ChatStreamEvent =
   | { type: "sources"; sources: Source[] }
   | { type: "token"; token: string }
   | { type: "done" }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "title"; title: string }
+  | { type: "followups"; questions: string[] };
 
 /**
  * Core chat orchestration.
@@ -82,6 +85,8 @@ export type ChatStreamEvent =
  * - Runs hybrid retrieval
  * - Streams LLM responses
  * - Persists messages
+ * - Generates title for first exchange
+ * - Generates follow-up questions
  */
 export async function* chat(
   input: ChatInput,
@@ -100,6 +105,7 @@ export async function* chat(
 
   // 2. Get chat history
   const history = await deps.messages.getHistory(conversationId, 20);
+  const isFirstExchange = history.length === 0;
 
   // 3. Condense question if there's history + extract conversation topic
   let searchQuery = question;
@@ -181,6 +187,33 @@ export async function* chat(
   await deps.conversations.updateTimestamp(conversationId);
 
   yield { type: "done" };
+
+  // 10. Generate title if this is the first exchange
+  if (isFirstExchange) {
+    try {
+      const titlePrompt = `Generate a short 4-6 word title for this conversation based on the question and answer. Return ONLY the title, nothing else.\n\nQuestion: ${question}\n\nAnswer: ${fullContent.slice(0, 500)}`;
+      const title = await deps.llm.complete(titlePrompt);
+      const cleanTitle = title.replace(/^["']|["']$/g, "").trim();
+      if (cleanTitle && cleanTitle.length > 0) {
+        await deps.conversations.updateTitle(conversationId, cleanTitle);
+        yield { type: "title", title: cleanTitle };
+      }
+    } catch {
+      // Title generation is non-critical, silently ignore failures
+    }
+  }
+
+  // 11. Generate follow-up questions
+  try {
+    const followupPrompt = `Based on this Q&A, suggest 3 brief follow-up questions the user might ask next. Return ONLY a JSON array of 3 strings, nothing else.\n\nQuestion: ${question}\n\nAnswer: ${fullContent.slice(0, 500)}`;
+    const followupRaw = await deps.llm.complete(followupPrompt);
+    const parsed = JSON.parse(followupRaw);
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      yield { type: "followups", questions: parsed.slice(0, 3) };
+    }
+  } catch {
+    // Follow-up generation is non-critical, silently ignore failures
+  }
 }
 
 // ═══ Prompt Construction (domain logic, not infra) ═══
@@ -195,6 +228,8 @@ Rules:
 - Be concise but complete. Finish every sentence fully.
 - Do not repeat the question back.
 - Do not cite sources in your response. Sources are shown separately.
+- When referencing specific information from the context, cite inline like [Source Name].
+- Only cite when making a specific factual claim from the documents.
 
 Format:
 - Write in complete sentences. Never break a sentence across lines.

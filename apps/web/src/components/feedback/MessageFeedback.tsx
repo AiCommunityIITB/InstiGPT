@@ -2,20 +2,39 @@
 
 import { useState } from "react";
 import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { toast } from "sonner";
 import clsx from "clsx";
+import { config } from "@/config";
 
 interface Props {
   messageId: string;
-  onFeedback?: (messageId: string, type: "positive" | "negative") => void;
+  conversationId?: string | null;
 }
 
-export function MessageFeedback({ messageId, onFeedback }: Props) {
+export function MessageFeedback({ messageId, conversationId }: Props) {
   const [selected, setSelected] = useState<"positive" | "negative" | null>(null);
 
-  function handleClick(type: "positive" | "negative") {
+  async function handleClick(type: "positive" | "negative") {
     if (selected === type) return;
     setSelected(type);
-    onFeedback?.(messageId, type);
+
+    try {
+      const res = await fetch(`${config.apiUrl}/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          message_id: messageId,
+          conversation_id: conversationId,
+          type,
+        }),
+      });
+      if (res.ok) {
+        toast.success("Thanks for the feedback!");
+      }
+    } catch {
+      // Silently fail — feedback is non-critical
+    }
   }
 
   return (

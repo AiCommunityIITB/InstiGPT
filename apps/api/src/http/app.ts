@@ -11,6 +11,7 @@ import type { Env } from "../types";
 import { authRoutes } from "./routes/auth";
 import { chatRoutes } from "./routes/chat";
 import { conversationRoutes } from "./routes/conversations";
+import { feedbackRoutes } from "./routes/feedback";
 
 export function createApp() {
   const app = new Hono<{ Bindings: Env }>();
@@ -39,6 +40,7 @@ export function createApp() {
   app.route("/auth", authRoutes);
   app.route("/chat", chatRoutes);
   app.route("/conversations", conversationRoutes);
+  app.route("/feedback", feedbackRoutes);
 
   // ─── Error handling ───
   app.notFound((c) => c.json({ error: "Not found" }, 404));

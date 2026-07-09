@@ -3,30 +3,43 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Menu, Plus, Command } from "lucide-react";
 import { Toaster, toast } from "sonner";
+import Link from "next/link";
 
 import { api } from "@/lib/api";
 import { useChat } from "@/hooks/useChat";
+import { useAuth } from "@/hooks/useAuth";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { KeyboardShortcuts } from "@/components/layout/KeyboardShortcuts";
 import { ProfileMenu } from "@/components/layout/ProfileMenu";
 import { ChatMessage } from "@/components/chat/ChatMessage";
 import { ChatInput } from "@/components/chat/ChatInput";
+import { SignupPrompt } from "@/components/chat/SignupPrompt";
 import { InstallPrompt } from "@/components/onboarding/InstallPrompt";
 import { IconButton } from "@/components/ui";
 import type { Conversation } from "@instigpt/shared";
 
 export default function Home() {
+  const { isAnonymous } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConvId, setCurrentConvId] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [input, setInput] = useState("");
+  const [anonMsgCount, setAnonMsgCount] = useState(0);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<{ focus: () => void }>(null);
 
-  const { messages, isLoading, send, loadMessages, clear } = useChat({
+  const { messages, isLoading, send, loadMessages, clear, error } = useChat({
     conversationId: currentConvId,
     onConversationCreated: (id) => {
       setCurrentConvId(id);
+      refreshConversations();
+    },
+    onTitleGenerated: (title) => {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === currentConvId ? { ...c, title } : c
+        )
+      );
       refreshConversations();
     },
   });
@@ -36,6 +49,14 @@ export default function Home() {
   }, [messages]);
 
   useEffect(() => { refreshConversations(); }, []);
+
+  // Track anonymous user message count
+  useEffect(() => {
+    if (isAnonymous) {
+      const userMsgCount = messages.filter((m) => m.role === "user").length;
+      setAnonMsgCount(userMsgCount);
+    }
+  }, [messages, isAnonymous]);
 
   const refreshConversations = useCallback(async () => {
     try {
@@ -66,6 +87,14 @@ export default function Home() {
     send(input);
     setInput("");
   }
+
+  function handleAsk(question: string) {
+    setInput(question);
+    send(question);
+  }
+
+  // Show signup prompt banner for anonymous users after 5 messages
+  const showSignupPrompt = isAnonymous && anonMsgCount >= 5;
 
   return (
     <>
@@ -124,11 +153,39 @@ export default function Home() {
               <EmptyState onExample={(q) => { send(q); }} />
             ) : (
               <div className="mx-auto w-full max-w-2xl space-y-6 px-3 py-6 sm:space-y-8 sm:px-4 sm:py-8 lg:max-w-3xl">
-                {messages.map((msg) => <ChatMessage key={msg.id} message={msg} />)}
+                {messages.map((msg) => (
+                  <ChatMessage
+                    key={msg.id}
+                    message={msg}
+                    conversationId={currentConvId}
+                    onAsk={handleAsk}
+                  />
+                ))}
                 <div ref={endRef} className="h-4" />
               </div>
             )}
           </main>
+
+          {/* Rate limit / anon limit error */}
+          {error?.code === "ANON_LIMIT" && (
+            <div className="shrink-0 border-t border-border px-3 py-2 sm:px-4">
+              <div className="mx-auto max-w-2xl rounded-lg border border-border bg-background-surface p-3 text-xs text-foreground-muted lg:max-w-3xl">
+                Sign up to continue chatting.{" "}
+                <Link href="/login" className="text-accent hover:underline">
+                  Go to login →
+                </Link>
+              </div>
+            </div>
+          )}
+
+          {/* Anonymous signup prompt after 5 messages */}
+          {showSignupPrompt && !error && (
+            <div className="shrink-0 border-t border-border px-3 py-2 sm:px-4">
+              <div className="mx-auto max-w-2xl lg:max-w-3xl">
+                <SignupPrompt />
+              </div>
+            </div>
+          )}
 
           {/* Input */}
           <div className="shrink-0 border-t border-border px-3 py-3 sm:px-4 sm:py-4">

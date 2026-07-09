@@ -12,6 +12,7 @@ interface User {
 interface AuthState {
   user: User | null;
   isLoading: boolean;
+  isAnonymous: boolean;
   login: (email: string, password: string) => Promise<string | null>;
   signup: (email: string, password: string, name: string) => Promise<string | null>;
   logout: () => Promise<void>;
@@ -20,6 +21,7 @@ interface AuthState {
 const AuthContext = createContext<AuthState>({
   user: null,
   isLoading: true,
+  isAnonymous: true,
   login: async () => null,
   signup: async () => null,
   logout: async () => {},
@@ -81,7 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, signup, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, isAnonymous: !user, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );
