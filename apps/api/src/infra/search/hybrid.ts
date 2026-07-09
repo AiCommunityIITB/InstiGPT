@@ -350,6 +350,26 @@ function mergeAndRank(
 // ─── Source title formatting ───
 
 function formatSourceTitle(rawSource: string, metadata: Record<string, unknown>): string {
+  // Known source mappings for clear display names
+  const friendlyNames: Record<string, string> = {
+    ugrulebook: "UG Rulebook",
+    campus_life_guide: "Campus Life Guide",
+    itc_annual_report: "ITC Annual Report",
+    resobin_courses_final: "Course Reviews (Resobin)",
+    grades: "Grade Statistics",
+    mech_damp_courses: "Mech DAMP Courses",
+    elec_damp_intern: "Elec DAMP Internships",
+    elec_damp_project: "Elec DAMP Projects",
+    elec_damp_minor: "Elec DAMP Minor",
+  };
+
+  // Check for known source first
+  const lower = rawSource.toLowerCase().replace(/\.[^/.]+$/, "");
+  if (friendlyNames[lower]) {
+    const section = metadata?.section as string | undefined;
+    return section ? `${friendlyNames[lower]} (${section})` : friendlyNames[lower];
+  }
+
   // Try to build a meaningful title from metadata
   const section = metadata?.section as string | undefined;
   const page = metadata?.page as number | undefined;
@@ -363,7 +383,7 @@ function formatSourceTitle(rawSource: string, metadata: Record<string, unknown>)
     .replace(/\b\w/g, (c) => c.toUpperCase()); // Title case
 
   if (section) {
-    title = `${title} — ${section}`;
+    title = `${title} (${section})`;
   } else if (category) {
     title = `${title} (${category})`;
   }
