@@ -205,11 +205,12 @@ export async function* chat(
 
   // 11. Generate follow-up questions
   try {
-    const followupPrompt = `Based on this Q&A, suggest 3 brief follow-up questions the user might ask next. Return ONLY a JSON array of 3 strings, nothing else.\n\nQuestion: ${question}\n\nAnswer: ${fullContent.slice(0, 500)}`;
+    const followupPrompt = `Based on this Q&A, suggest 3 brief follow-up questions the user might ask next. Make each one distinct and specific. Return ONLY a JSON array of 3 strings, nothing else.\n\nQuestion: ${question}\n\nAnswer: ${fullContent.slice(0, 500)}`;
     const followupRaw = await deps.llm.complete(followupPrompt);
     const parsed = JSON.parse(followupRaw);
     if (Array.isArray(parsed) && parsed.length > 0) {
-      yield { type: "followups", questions: parsed.slice(0, 3) };
+      const unique = [...new Set(parsed as string[])].slice(0, 3);
+      yield { type: "followups", questions: unique };
     }
   } catch {
     // Follow-up generation is non-critical, silently ignore failures
@@ -227,7 +228,6 @@ Rules:
 - If you're truly unsure, say so and suggest where to check.
 - Be concise but complete. Finish every sentence fully.
 - Do not repeat the question back.
-- Do not cite sources in your response. Sources are shown separately.
 - When referencing specific information from the context, cite inline like [Source Name].
 - Only cite when making a specific factual claim from the documents.
 

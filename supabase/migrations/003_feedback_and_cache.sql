@@ -31,7 +31,7 @@ CREATE INDEX idx_semantic_cache_embedding ON semantic_cache
 -- Function to search the semantic cache
 CREATE OR REPLACE FUNCTION search_cache(
     query_embedding vector(768),
-    similarity_threshold FLOAT DEFAULT 0.95
+    similarity_threshold FLOAT DEFAULT 0.98
 )
 RETURNS TABLE (
     id UUID,

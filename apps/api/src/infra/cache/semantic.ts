@@ -19,7 +19,7 @@ export interface CacheHit {
 
 export function createSemanticCache(sb: SupabaseClient): SemanticCache {
   return {
-    async check(embedding, threshold = 0.95) {
+    async check(embedding, threshold = 0.98) {
       const { data, error } = await sb.rpc("search_cache", {
         query_embedding: JSON.stringify(embedding),
         similarity_threshold: threshold,
