@@ -192,7 +192,7 @@ export default function Home() {
           )}
 
           {/* Input */}
-          <div className="shrink-0 border-t border-border px-3 py-3 sm:px-4 sm:py-4">
+          <div className="shrink-0 border-t border-border px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-4 sm:py-4">
             <ChatInput
               ref={inputRef}
               value={input}
