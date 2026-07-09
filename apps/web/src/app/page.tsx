@@ -45,7 +45,11 @@ export default function Home() {
   });
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Only auto-scroll when streaming (new tokens arriving), not on follow-up updates
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg?.isStreaming || lastMsg?.role === "user") {
+      endRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
   useEffect(() => { refreshConversations(); }, []);
